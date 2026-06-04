@@ -1,0 +1,5 @@
+outs:
+- md5: 0ecaf97c3b1e6759590e0facfe193cb2
+  size: 3098
+  hash: md5
+  path: dabadoc_raw.csv
