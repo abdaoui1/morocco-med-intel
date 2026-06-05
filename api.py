@@ -77,7 +77,7 @@ def get_medecins(
         "total": total,
         "page":  page,
         "limit": limit,
-        "data":  df_page.where(df_page.notna(), None).to_dict(orient="records"),
+        "data":  df_page.fillna("").astype(object).to_dict(orient="records"),
     }
 
 
@@ -120,7 +120,7 @@ def get_carte(
     cols = ["nom_professionnel", "specialite_clean", "ville", "quartier_clean",
             "adresse_complete", "nb_avis", "latitude", "longitude"]
     cols = [c for c in cols if c in df.columns]
-    return df[cols].where(df[cols].notna(), None).to_dict(orient="records")
+    return df[cols].fillna("").to_dict(orient="records")
 
 
 @app.get("/gaps", summary="Quartiers sans médecin pour une spécialité donnée")

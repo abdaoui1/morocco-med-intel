@@ -190,6 +190,10 @@ def scrape(start: int, end: int, delay: tuple, workers: int, deep: bool, output:
     doctors: list[Doctor] = []
     progress_file = Path("data/scraping_progress.json")
     progress_file.parent.mkdir(parents=True, exist_ok=True)
+    # Reset progress at start
+    progress_file.write_text(
+        f'{{"current": 0, "total": {end - start + 1}, "doctors": 0, "done": false}}'
+    )
     total_pages = end - start + 1
 
     for i, page in enumerate(range(start, end + 1), 1):

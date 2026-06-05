@@ -12,6 +12,38 @@ import streamlit as st
 
 API_BASE = "http://localhost:8000"
 
+# ── Clear stale progress on startup ───────────────────────────────────────
+if "startup_done" not in st.session_state:
+    from pathlib import Path as _SP
+    _pf = _SP("data/scraping_progress.json")
+    if _pf.exists():
+        import json as _sj
+        _pd = _sj.loads(_pf.read_text())
+        if not _pd.get("done", True):
+            _pd["done"] = True
+            _pf.write_text(_sj.dumps(_pd))
+    st.session_state["startup_done"] = True
+
+# ── Auto-start API if not running ──────────────────────────────────────────
+def _ensure_api():
+    try:
+        requests.get(f"{API_BASE}/stats", timeout=2)
+    except Exception:
+        subprocess.Popen(
+            ["python", "-m", "uvicorn", "api:app", "--port", "8000"],
+            cwd="."
+        )
+        import time
+        for _ in range(10):
+            time.sleep(1)
+            try:
+                requests.get(f"{API_BASE}/stats", timeout=1)
+                break
+            except Exception:
+                continue
+
+_ensure_api()
+
 st.set_page_config(page_title="Morocco Medical Analytics", page_icon="🩺", layout="wide")
 
 st.markdown("""
@@ -26,7 +58,7 @@ h1, h2, h3 { color: #1b2746; }
 
 # ── API helpers ────────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=10)
 def api_get(path: str, params: dict = None):
     try:
         r = requests.get(f"{API_BASE}{path}", params=params, timeout=10)
@@ -60,19 +92,44 @@ with st.sidebar:
         help="Entrez l'URL de la source médicale à scraper"
     )
     col_pages, col_btn = st.columns([1, 1])
-    pages_end = col_pages.number_input("Pages", min_value=1, max_value=1297, value=5, step=1)
+    pages_end = col_pages.number_input("Pages", min_value=1, max_value=1297, value=10, step=10)
 
     if col_btn.button("▶ Lancer", use_container_width=True):
         if data_url:
-            # Launch scraper in background (non-blocking)
-            subprocess.Popen(
-                ["python", "scraper_dabadoc.py",
-                 "--pages", "1", str(pages_end), "--deep-scrape"],
-                cwd="."
-            )
-            st.success("✅ Scraper lancé en arrière-plan! Suivez la progression ci-dessous.")
+            import threading
+            def _run_scraper():
+                subprocess.run(
+                    ["python", "scraper_dabadoc.py",
+                     "--pages", "1", str(pages_end), "--deep-scrape"],
+                    cwd="."
+                )
+            threading.Thread(target=_run_scraper, daemon=True).start()
+            st.success("✅ Scraper lancé!")
         else:
             st.warning("Entrez une URL valide.")
+
+    # Stop button — kills scraper if running
+    try:
+        import psutil as _ps
+        _scraper_procs = [
+            p for p in _ps.process_iter(["pid", "cmdline"])
+            if p.info["cmdline"] and "scraper_dabadoc" in " ".join(p.info["cmdline"])
+        ]
+        if _scraper_procs:
+            if st.button("⏹ Stop Scraper", type="primary"):
+                for p in _scraper_procs:
+                    p.kill()
+                from pathlib import Path as _P2
+                import json as _j2
+                _pf = _P2("data/scraping_progress.json")
+                if _pf.exists():
+                    _d = _j2.loads(_pf.read_text())
+                    _d["done"] = True
+                    _pf.write_text(_j2.dumps(_d))
+                st.warning("🛑 Scraper arrêté.")
+                st.rerun()
+    except Exception:
+        pass
 
     # ── Real-time scraping progress ────────────────────────────────────────
     import json as _json
@@ -106,11 +163,23 @@ with st.sidebar:
     try:
         import json as _j
         from pathlib import Path as _P
-        _p = _j.loads(_P("data/scraping_progress.json").read_text())
-        if not _p.get("done", True):
-            import time as _t
-            _t.sleep(3)
-            st.rerun()
+        import psutil as _ps
+        _prog_file = _P("data/scraping_progress.json")
+        if _prog_file.exists():
+            _p = _j.loads(_prog_file.read_text())
+            _scraper_running = any(
+                "scraper_dabadoc" in " ".join(proc.cmdline())
+                for proc in _ps.process_iter(["cmdline"])
+                if proc.info["cmdline"]
+            )
+            # If progress says running but scraper is dead → mark as done
+            if not _p.get("done", True) and not _scraper_running:
+                _p["done"] = True
+                _prog_file.write_text(_j.dumps(_p))
+            elif not _p.get("done", True) and _scraper_running:
+                import time as _t
+                _t.sleep(3)
+                st.rerun()
     except Exception:
         pass
 
