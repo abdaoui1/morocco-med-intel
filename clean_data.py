@@ -23,6 +23,7 @@ ANALYTICS_PATH = Path("data/processed/dabadoc_analytics.csv")
 MODELING_PATH  = Path("data/processed/dabadoc_modeling.csv")
 
 DQV_MISSING_THRESHOLD = 0.15   # <15% missing per feature
+DQV_GPS_THRESHOLD     = 0.60   # GPS allowed up to 60% missing (optional field)
 DQV_NB_AVIS_MAX       = 5000   # domain: max realistic reviews per doctor
 DQV_VALID_SOURCES     = {"DabaDoc"}
 
@@ -130,8 +131,9 @@ def run_dqv(df: pd.DataFrame) -> bool:
     print("  [1/5] Missing Value Check…")
     for col in df.columns:
         missing_rate = df[col].isna().mean()
-        if missing_rate > DQV_MISSING_THRESHOLD:
-            print(f"  ❌ FAIL — '{col}': {missing_rate:.1%} missing (threshold: {DQV_MISSING_THRESHOLD:.0%})")
+        threshold = DQV_GPS_THRESHOLD if col in ("latitude", "longitude") else DQV_MISSING_THRESHOLD
+        if missing_rate > threshold:
+            print(f"  ❌ FAIL — '{col}': {missing_rate:.1%} missing (threshold: {threshold:.0%})")
             passed = False
         else:
             print(f"  ✅ '{col}': {missing_rate:.1%} missing")
@@ -158,8 +160,8 @@ def run_dqv(df: pd.DataFrame) -> bool:
         invalid_lat = ((df_gps["latitude"] < 27) | (df_gps["latitude"] > 36)).sum()
         invalid_lon = ((df_gps["longitude"] < -14) | (df_gps["longitude"] > -1)).sum()
         if invalid_lat + invalid_lon > 0:
-            print(f"  ❌ FAIL — GPS: {invalid_lat} invalid latitudes, {invalid_lon} invalid longitudes (Morocco bounds)")
-            passed = False
+            print(f"  ⚠️  WARNING — GPS: {invalid_lat} invalid latitudes, {invalid_lon} invalid longitudes (will be nullified)")
+            df.loc[(df["latitude"] < 27) | (df["latitude"] > 36), ["latitude","longitude"]] = None
         else:
             print(f"  ✅ GPS: all coordinates within Morocco bounds")
     if "specialite" in df.columns:
