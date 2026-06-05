@@ -4,6 +4,7 @@ Morocco Medical Dashboard — Streamlit
 Consumes FastAPI at API_BASE (default: http://localhost:8000)
 """
 
+import subprocess
 import pandas as pd
 import plotly.express as px
 import requests
@@ -49,6 +50,49 @@ def require_api():
 # ── Sidebar ────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🩺 DabaDoc Analytics")
+    st.markdown("---")
+
+    # ── URL Input → Pipeline Trigger (professor requirement)
+    st.subheader("🔗 Source de données")
+    data_url = st.text_input(
+        "URL du dataset médical",
+        value="https://www.dabadoc.com/recherche",
+        help="Entrez l'URL de la source médicale à scraper"
+    )
+    col_pages, col_btn = st.columns([1, 1])
+    pages_end = col_pages.number_input("Pages", min_value=1, max_value=1297, value=5, step=1)
+
+    if col_btn.button("▶ Lancer", use_container_width=True):
+        if data_url:
+            st.info(f"⏳ Pipeline lancé sur:\n`{data_url}`")
+            log_placeholder = st.empty()
+            with st.spinner("Scraping + Cleaning en cours…"):
+                try:
+                    # Step 1: Scrape
+                    proc1 = subprocess.run(
+                        ["python", "scraper_dabadoc.py",
+                         "--pages", "1", str(pages_end), "--deep-scrape"],
+                        capture_output=True, text=True, cwd="."
+                    )
+                    if proc1.returncode != 0:
+                        st.error("❌ Scraper error:\n" + proc1.stderr[-500:])
+                    else:
+                        # Step 2: Clean + DQV + DVC
+                        proc2 = subprocess.run(
+                            ["python", "clean_data.py"],
+                            capture_output=True, text=True, cwd="."
+                        )
+                        if proc2.returncode != 0:
+                            st.error("❌ Clean error:\n" + proc2.stderr[-500:])
+                        else:
+                            st.success("✅ Pipeline terminé! Rafraîchissez la page.")
+                            log_placeholder.code(proc2.stdout[-1000:])
+                            st.cache_data.clear()
+                except Exception as e:
+                    st.error(f"❌ {e}")
+        else:
+            st.warning("Entrez une URL valide.")
+
     st.markdown("---")
     st.info("Source: DabaDoc.com — Maroc")
     st.caption(f"API: `{API_BASE}`")
