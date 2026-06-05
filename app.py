@@ -112,7 +112,7 @@ c3.metric("Spécialités",      stats["total_specialites"] or "—")
 c4.metric("Total Avis",       f"{stats['total_avis']:,}" if stats["total_avis"] else "—")
 
 # ── Tabs ───────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs(["🔍 Données", "📍 Carte", "📊 Analyse", "💡 Opportunités"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Données", "📍 Carte", "📊 Analyse", "💡 Opportunités", "🤖 ML Saturation"])
 
 # ── Tab 1: Données ─────────────────────────────────────────────────────────
 with tab1:
@@ -241,3 +241,99 @@ with tab4:
                     cols[i % 3].write(f"📍 {q}")
             else:
                 st.info("Marché saturé dans tous les quartiers connus.")
+
+
+# ── Tab 5: ML Saturation ───────────────────────────────────────────────────
+with tab5:
+    st.header("🤖 Prédiction de Saturation — ML")
+    st.markdown("Estimez si une zone médicale est **saturée** ou une **opportunité** d'installation.")
+
+    from pathlib import Path as _Path
+    MODEL_PATH  = _Path("models/saturation_model.pkl")
+    REPORT_PATH = _Path("models/saturation_report.json")
+
+    # Train button
+    if not MODEL_PATH.exists():
+        st.warning("⚠️ Modèle non entraîné.")
+        if st.button("🏋️ Entraîner le modèle"):
+            with st.spinner("Entraînement en cours…"):
+                result = subprocess.run(["python", "model.py"], capture_output=True, text=True)
+                if result.returncode == 0:
+                    st.success("✅ Modèle entraîné!")
+                    st.code(result.stdout)
+                    st.rerun()
+                else:
+                    st.error(result.stderr)
+        st.stop()
+
+    # Model report
+    import json as _json
+    report = _json.loads(REPORT_PATH.read_text())
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Accuracy",  f"{report['accuracy']:.1%}")
+    m2.metric("AUC-ROC",   f"{report['auc_roc']:.3f}" if report.get("auc_roc") else "—")
+    m3.metric("F1 Macro",  f"{report['f1_macro']:.3f}")
+
+    # Feature importance chart
+    st.markdown("---")
+    st.subheader("📊 Feature Importance")
+    fi = report["feature_importance"]
+    fi_df = pd.DataFrame({"Feature": list(fi.keys()), "Importance": list(fi.values())})
+    fig_fi = px.bar(fi_df, x="Importance", y="Feature", orientation="h",
+                    color="Importance", color_continuous_scale="Blues")
+    fig_fi.update_layout(yaxis={"categoryorder": "total ascending"}, height=350)
+    st.plotly_chart(fig_fi, use_container_width=True)
+
+    # Prediction form
+    st.markdown("---")
+    st.subheader("🔮 Prédire une Zone")
+    villes_list_ml = [v["ville"] for v in (api_get("/villes") or [])]
+    specs_list_ml  = [s["specialite"] for s in (api_get("/specialites") or [])]
+
+    p1, p2 = st.columns(2)
+    pred_ville = p1.selectbox("Ville", villes_list_ml, key="ml_ville")
+    pred_spec  = p2.selectbox("Spécialité", specs_list_ml, key="ml_spec")
+
+    # Get quartiers for selected ville
+    med_data = api_get("/medecins", {"ville": pred_ville, "limit": 500}) or {"data": []}
+    quartiers = sorted(set(r.get("quartier_clean", "") for r in med_data["data"] if r.get("quartier_clean")))
+    pred_quartier = st.selectbox("Quartier", quartiers or ["Autre/Inconnu"], key="ml_quartier")
+
+    if st.button("🔮 Prédire la saturation"):
+        try:
+            from model import predict_zone
+            result = predict_zone(pred_ville, pred_spec, pred_quartier)
+            if "error" in result:
+                st.warning(result["error"])
+            else:
+                score = result["saturation_score"]
+                label = result["label"]
+                st.markdown(f"### {label}")
+                st.progress(score)
+                st.metric("Score de saturation", f"{score:.1%}",
+                          delta="Risque élevé" if score >= 0.5 else "Bonne opportunité",
+                          delta_color="inverse")
+        except Exception as e:
+            st.error(f"Erreur: {e}")
+
+    # Batch: saturation scores for all specialties in selected ville
+    st.markdown("---")
+    st.subheader(f"📋 Saturation globale — {pred_ville}")
+    if st.button("📊 Analyser toutes les spécialités"):
+        try:
+            from model import predict_zone
+            rows = []
+            for spec in specs_list_ml:
+                r = predict_zone(pred_ville, spec, "Autre/Inconnu")
+                if "error" not in r:
+                    rows.append(r)
+            if rows:
+                df_scores = pd.DataFrame(rows).sort_values("saturation_score", ascending=False)
+                fig_scores = px.bar(df_scores, x="specialite", y="saturation_score",
+                                    color="saturation_score", color_continuous_scale="RdYlGn_r",
+                                    labels={"saturation_score": "Score Saturation", "specialite": "Spécialité"})
+                fig_scores.add_hline(y=0.5, line_dash="dash", line_color="red", annotation_text="Seuil saturation")
+                st.plotly_chart(fig_scores, use_container_width=True)
+        except Exception as e:
+            st.error(f"Erreur: {e}")

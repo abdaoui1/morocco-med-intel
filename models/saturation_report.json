@@ -1,0 +1,30 @@
+{
+  "accuracy": 0.7333,
+  "auc_roc": 0.6705,
+  "f1_macro": 0.6591,
+  "feature_importance": {
+    "spec_code": 0.29886049211484284,
+    "longitude_scaled": 0.2760593754139028,
+    "latitude_scaled": 0.2022264311898833,
+    "district_code": 0.14298913093426682,
+    "nb_avis_scaled": 0.06651534564568733,
+    "consultation_video": 0.006956710383498094,
+    "consultation_domicile": 0.004345303878252404,
+    "consultation_cabinet": 0.0020472104396665005,
+    "city_code": 0.0
+  },
+  "features_used": [
+    "city_code",
+    "spec_code",
+    "district_code",
+    "consultation_cabinet",
+    "consultation_video",
+    "consultation_domicile",
+    "nb_avis_scaled",
+    "latitude_scaled",
+    "longitude_scaled"
+  ],
+  "n_train": 60,
+  "n_test": 15,
+  "saturated_rate": 0.7067
+}
