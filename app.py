@@ -15,9 +15,10 @@ API_BASE = "http://localhost:8000"
 # ── Clear stale progress on startup ───────────────────────────────────────
 if "startup_done" not in st.session_state:
     from pathlib import Path as _SP
+    import json as _sj
+    # Reset stale progress file only
     _pf = _SP("data/scraping_progress.json")
     if _pf.exists():
-        import json as _sj
         _pd = _sj.loads(_pf.read_text())
         if not _pd.get("done", True):
             _pd["done"] = True
@@ -92,7 +93,7 @@ with st.sidebar:
         help="Entrez l'URL de la source médicale à scraper"
     )
     col_pages, col_btn = st.columns([1, 1])
-    pages_end = col_pages.number_input("Pages", min_value=1, max_value=1297, value=10, step=10)
+    pages_end = col_pages.number_input("Total pages", min_value=1, max_value=1297, value=10, step=10)
 
     if col_btn.button("▶ Lancer", use_container_width=True):
         if data_url:
@@ -100,7 +101,7 @@ with st.sidebar:
             def _run_scraper():
                 subprocess.run(
                     ["python", "scraper_dabadoc.py",
-                     "--pages", "1", str(pages_end), "--deep-scrape"],
+                     "--pages", "1", str(pages_end), "--deep-scrape", "--resume"],
                     cwd="."
                 )
             threading.Thread(target=_run_scraper, daemon=True).start()
