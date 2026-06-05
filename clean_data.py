@@ -128,9 +128,15 @@ def run_dqv(df: pd.DataFrame) -> bool:
     passed = True
 
     # 1. Missing Value Check (<15% per feature)
+    # Optional fields (deep-scrape only) are allowed up to 100% missing
+    OPTIONAL_COLS = {"latitude", "longitude", "adresse_complete",
+                     "consultation_cabinet", "consultation_video", "consultation_domicile"}
     print("  [1/5] Missing Value Check…")
     for col in df.columns:
         missing_rate = df[col].isna().mean()
+        if col in OPTIONAL_COLS:
+            print(f"  ⚠️  '{col}': {missing_rate:.1%} missing (optional — deep-scrape field)")
+            continue
         threshold = DQV_GPS_THRESHOLD if col in ("latitude", "longitude") else DQV_MISSING_THRESHOLD
         if missing_rate > threshold:
             print(f"  ❌ FAIL — '{col}': {missing_rate:.1%} missing (threshold: {threshold:.0%})")

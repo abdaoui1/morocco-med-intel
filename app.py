@@ -30,8 +30,9 @@ def _ensure_api():
     try:
         requests.get(f"{API_BASE}/stats", timeout=2)
     except Exception:
+        import sys
         subprocess.Popen(
-            ["python", "-m", "uvicorn", "api:app", "--port", "8000"],
+            [sys.executable, "-m", "uvicorn", "api:app", "--port", "8000"],
             cwd="."
         )
         import time
@@ -92,8 +93,16 @@ with st.sidebar:
         value="https://www.dabadoc.com/recherche",
         help="Entrez l'URL de la source médicale à scraper"
     )
+    # Default pages = last scraped page
+    try:
+        import json as _jd
+        from pathlib import Path as _Pd
+        _last = _jd.loads(_Pd("data/scraping_progress.json").read_text()).get("total", 10)
+    except Exception:
+        _last = 10
+
     col_pages, col_btn = st.columns([1, 1])
-    pages_end = col_pages.number_input("Total pages", min_value=1, max_value=1297, value=10, step=10)
+    pages_end = col_pages.number_input("Total pages", min_value=1, max_value=1297, value=_last, step=10)
 
     if col_btn.button("▶ Lancer", use_container_width=True):
         if data_url:
@@ -103,11 +112,11 @@ with st.sidebar:
             _PP("data/scraping_progress.json").write_text(
                 _jj.dumps({"current": 0, "total": pages_end, "doctors": 0, "done": False})
             )
-            import threading
+            import threading, sys
             def _run_scraper():
                 subprocess.run(
-                    ["python", "scraper_dabadoc.py",
-                     "--pages", "1", str(pages_end), "--deep-scrape", "--resume"],
+                    [sys.executable, "scraper_dabadoc.py",
+                     "--pages", "1", str(pages_end), "--deep-scrape"],
                     cwd="."
                 )
             threading.Thread(target=_run_scraper, daemon=True).start()
@@ -149,12 +158,13 @@ with st.sidebar:
             if _prog["done"]:
                 st.success(f"✅ Scraping terminé — {_prog['doctors']} médecins collectés")
                 if st.button("🧹 Lancer Clean + DQV"):
-                    proc2 = subprocess.run(["python", "clean_data.py"], capture_output=True, text=True, cwd=".")
+                    import sys
+                    proc2 = subprocess.run([sys.executable, "clean_data.py"], capture_output=True, text=True, cwd=".")
                     if proc2.returncode == 0:
                         st.success("✅ Clean terminé!")
                         st.cache_data.clear()
                     else:
-                        st.error(proc2.stderr[-500:])
+                        st.error(proc2.stdout[-800:] + proc2.stderr[-800:])
             else:
                 st.markdown("**⏳ Scraping en cours…**")
                 st.progress(_pct, text=f"Page {_prog['current']} / {_prog['total']} — {_prog['doctors']} médecins")
