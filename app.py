@@ -376,7 +376,8 @@ with tab5:
         st.warning("⚠️ Modèle non entraîné.")
         if st.button("🏋️ Entraîner le modèle"):
             with st.spinner("Entraînement en cours…"):
-                result = subprocess.run(["python", "model.py"], capture_output=True, text=True)
+                import sys
+                result = subprocess.run([sys.executable, "model.py"], capture_output=True, text=True)
                 if result.returncode == 0:
                     st.success("✅ Modèle entraîné!")
                     st.code(result.stdout)

@@ -14,6 +14,7 @@ import subprocess
 import unicodedata
 from pathlib import Path
 
+import joblib
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
@@ -347,6 +348,8 @@ def run():
         scaler = StandardScaler()
         df_m[[f"{c}_scaled" for c in scale_cols]] = scaler.fit_transform(df_m[scale_cols])
         df_m = df_m.drop(columns=scale_cols)  # keep only scaled versions
+        Path("models").mkdir(exist_ok=True)
+        joblib.dump(scaler, "models/scaler.pkl")
         print(f"  ✅ StandardScaler applied on: {scale_cols}")
 
     df_m.to_csv(MODELING_PATH, index=False)

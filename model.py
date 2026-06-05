@@ -127,41 +127,34 @@ def predict_zone(ville: str, specialite: str, quartier: str) -> dict:
     if not MODEL_PATH.exists():
         raise FileNotFoundError("Model not found. Run model.py first.")
 
-    model = joblib.load(MODEL_PATH)
+    model  = joblib.load(MODEL_PATH)
+    report = json.loads(REPORT_PATH.read_text())
+    available = report["features_used"]
 
-    # Build feature vector from analytics data
     df = pd.read_csv(MODELING_PATH)
     row = df[
         (df["ville"] == ville) &
         (df["specialite_clean"] == specialite) &
         (df["quartier_clean"] == quartier)
     ]
-
     if row.empty:
-        # Use city/spec averages as proxy for unknown zones
-        row = df[
-            (df["ville"] == ville) &
-            (df["specialite_clean"] == specialite)
-        ]
-        if row.empty:
-            row = df[df["ville"] == ville]
-
+        row = df[(df["ville"] == ville) & (df["specialite_clean"] == specialite)]
+    if row.empty:
+        row = df[df["ville"] == ville]
     if row.empty:
         return {"error": "No data available for this combination"}
 
-    report = json.loads(REPORT_PATH.read_text())
-    available = report["features_used"]
     X = row[available].mean().to_frame().T
 
     prob = model.predict_proba(X)[0][1]
     label = "🔴 Saturé" if prob >= 0.5 else "🟢 Opportunité"
 
     return {
-        "ville":       ville,
-        "specialite":  specialite,
-        "quartier":    quartier,
+        "ville":            ville,
+        "specialite":       specialite,
+        "quartier":         quartier,
         "saturation_score": round(float(prob), 3),
-        "label":       label,
+        "label":            label,
     }
 
 
