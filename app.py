@@ -93,6 +93,22 @@ with st.sidebar:
         else:
             st.warning("Entrez une URL valide.")
 
+    # ── Real-time scraping progress ────────────────────────────────────────
+    import json as _json
+    from pathlib import Path as _Path
+    _prog_file = _Path("data/scraping_progress.json")
+    if _prog_file.exists():
+        try:
+            _prog = _json.loads(_prog_file.read_text())
+            _pct  = _prog["current"] / max(_prog["total"], 1)
+            if _prog["done"]:
+                st.success(f"✅ Scraping terminé — {_prog['doctors']} médecins collectés")
+            else:
+                st.markdown(f"**⏳ Scraping en cours…**")
+                st.progress(_pct, text=f"Page {_prog['current']} / {_prog['total']} — {_prog['doctors']} médecins")
+        except Exception:
+            pass
+
     st.markdown("---")
     st.info("Source: DabaDoc.com — Maroc")
     st.caption(f"API: `{API_BASE}`")
