@@ -97,6 +97,12 @@ with st.sidebar:
 
     if col_btn.button("▶ Lancer", use_container_width=True):
         if data_url:
+            # Reset progress immediately before scraper starts
+            from pathlib import Path as _PP
+            import json as _jj
+            _PP("data/scraping_progress.json").write_text(
+                _jj.dumps({"current": 0, "total": pages_end, "doctors": 0, "done": False})
+            )
             import threading
             def _run_scraper():
                 subprocess.run(
