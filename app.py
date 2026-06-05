@@ -126,7 +126,23 @@ with tab1:
     f1, f2, f3 = st.columns([2, 2, 1])
     sel_ville = f1.selectbox("Ville", villes_list, key="d_ville")
     sel_spec  = f2.selectbox("Spécialité", specs_list, key="d_spec")
-    sel_page  = f3.number_input("Page", min_value=1, value=1, key="d_page")
+
+    # Reset page to 1 when filters change
+    filter_key = f"{sel_ville}_{sel_spec}"
+    if st.session_state.get("_last_filter") != filter_key:
+        st.session_state["_last_filter"] = filter_key
+        st.session_state["_cur_page"] = 1
+
+    # Get total first to show max pages
+    _params_count = {"page": 1, "limit": 1}
+    if sel_ville != "Toutes": _params_count["ville"] = sel_ville
+    if sel_spec  != "Toutes": _params_count["specialite"] = sel_spec
+    _total = (api_get("/medecins", _params_count) or {}).get("total", 0)
+    _max_page = max(1, -(-_total // 50))
+
+    sel_page = f3.number_input("Page", min_value=1, max_value=_max_page,
+                               value=st.session_state.get("_cur_page", 1))
+    st.session_state["_cur_page"] = sel_page
 
     params = {"page": sel_page, "limit": 50}
     if sel_ville != "Toutes": params["ville"] = sel_ville
@@ -135,7 +151,7 @@ with tab1:
     result = api_get("/medecins", params) or {"total": 0, "data": []}
     df = pd.DataFrame(result["data"])
 
-    st.caption(f"{result['total']} médecins trouvés — page {sel_page}")
+    st.caption(f"{result['total']} médecins trouvés — page {sel_page} / {_max_page}")
 
     if not df.empty:
         col_cfg = {}

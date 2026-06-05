@@ -188,9 +188,15 @@ def scrape(start: int, end: int, delay: tuple, workers: int, deep: bool, output:
 
     session = make_session()
     doctors: list[Doctor] = []
+    progress_file = Path("data/scraping_progress.json")
+    progress_file.parent.mkdir(parents=True, exist_ok=True)
+    total_pages = end - start + 1
 
     for i, page in enumerate(range(start, end + 1), 1):
-        logging.info(f"Page {i}/{end - start + 1} (page {page})…")
+        logging.info(f"Page {i}/{total_pages} (page {page})…")
+        progress_file.write_text(
+            f'{{"current": {i}, "total": {total_pages}, "doctors": {len(doctors)}, "done": false}}'
+        )
         html = fetch(session, SEARCH_URL.format(page=page))
         if not html:
             continue
@@ -248,6 +254,11 @@ def scrape(start: int, end: int, delay: tuple, workers: int, deep: bool, output:
             })
 
     logging.info(f"✅ Saved {len(doctors)} doctors → {out.resolve()}")
+    progress_file = Path("data/scraping_progress.json")
+    if progress_file.exists():
+        progress_file.write_text(
+            f'{{"current": {end - start + 1}, "total": {end - start + 1}, "doctors": {len(doctors)}, "done": true}}'
+        )
 
 
 def main():
