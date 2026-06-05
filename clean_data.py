@@ -91,6 +91,12 @@ def clean_address(addr, city) -> str:
 def extract_quartier(addr) -> str:
     if not isinstance(addr, str) or addr == "Non spécifiée":
         return "Autre/Inconnu"
+    
+    # Try to extract explicit "Quartier X" or "Q. X" pattern first
+    m = re.search(r"\bq(?:uartier)?\.?\s+([A-ZÀ-Ÿa-zà-ÿ][A-ZÀ-Ÿa-zà-ÿ\s\-]{2,20})", addr, re.IGNORECASE)
+    if m:
+        return m.group(1).strip().title()
+
     clean = normalize_text(addr)
     for prefix in ["quartier", "bd", "boulevard", "rue", "avenue", "residence", "immeuble", "angle"]:
         clean = re.sub(r"\b" + prefix + r"\b", "", clean)
@@ -109,12 +115,25 @@ def extract_quartier(addr) -> str:
         "Inezgane":     ["inezgane", "inzegane"],
         "Sidi Maarouf": ["sidi maarouf"],
         "Ain Sebaa":    ["ain sebaa"],
+        "Atlas":        ["atlas"],
+        "Akkari":       ["akkari"],
+        "Hay Nahda":    ["hay nahda", "nahda"],
+        "Diour Jamaa":  ["diour jamaa"],
+        "Les Hôpitaux": ["hopitaux", "hôpitaux"],
+        "Massira":      ["massira"],
+        "Hay Inara":    ["inara"],
+        "Guéliz":       ["gueliz", "guéliz"],
+        "Hivernage":    ["hivernage"],
+        "Mellah":       ["mellah"],
     }
     for canon, patterns in DISTRICTS.items():
         if any(p in clean for p in patterns):
             return canon
-    words = clean.split()
-    return " ".join(words[:2]).title() if words else "Autre/Inconnu"
+    # Fallback: extract Bd/Rue name from original address
+    m2 = re.search(r"\b(?:bd|boulevard|rue|avenue|av)\.?\s*([A-ZÀ-Ÿa-zà-ÿ][A-ZÀ-Ÿa-zà-ÿ\s]{2,25})", addr, re.IGNORECASE)
+    if m2:
+        return m2.group(1).strip().title()
+    return "Autre/Inconnu"
 
 
 # ── DQV Gate ───────────────────────────────────────────────────────────────
