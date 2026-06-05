@@ -64,32 +64,13 @@ with st.sidebar:
 
     if col_btn.button("▶ Lancer", use_container_width=True):
         if data_url:
-            st.info(f"⏳ Pipeline lancé sur:\n`{data_url}`")
-            log_placeholder = st.empty()
-            with st.spinner("Scraping + Cleaning en cours…"):
-                try:
-                    # Step 1: Scrape
-                    proc1 = subprocess.run(
-                        ["python", "scraper_dabadoc.py",
-                         "--pages", "1", str(pages_end), "--deep-scrape"],
-                        capture_output=True, text=True, cwd="."
-                    )
-                    if proc1.returncode != 0:
-                        st.error("❌ Scraper error:\n" + proc1.stderr[-500:])
-                    else:
-                        # Step 2: Clean + DQV + DVC
-                        proc2 = subprocess.run(
-                            ["python", "clean_data.py"],
-                            capture_output=True, text=True, cwd="."
-                        )
-                        if proc2.returncode != 0:
-                            st.error("❌ Clean error:\n" + proc2.stderr[-500:])
-                        else:
-                            st.success("✅ Pipeline terminé! Rafraîchissez la page.")
-                            log_placeholder.code(proc2.stdout[-1000:])
-                            st.cache_data.clear()
-                except Exception as e:
-                    st.error(f"❌ {e}")
+            # Launch scraper in background (non-blocking)
+            subprocess.Popen(
+                ["python", "scraper_dabadoc.py",
+                 "--pages", "1", str(pages_end), "--deep-scrape"],
+                cwd="."
+            )
+            st.success("✅ Scraper lancé en arrière-plan! Suivez la progression ci-dessous.")
         else:
             st.warning("Entrez une URL valide.")
 
@@ -103,15 +84,35 @@ with st.sidebar:
             _pct  = _prog["current"] / max(_prog["total"], 1)
             if _prog["done"]:
                 st.success(f"✅ Scraping terminé — {_prog['doctors']} médecins collectés")
+                if st.button("🧹 Lancer Clean + DQV"):
+                    proc2 = subprocess.run(["python", "clean_data.py"], capture_output=True, text=True, cwd=".")
+                    if proc2.returncode == 0:
+                        st.success("✅ Clean terminé!")
+                        st.cache_data.clear()
+                    else:
+                        st.error(proc2.stderr[-500:])
             else:
-                st.markdown(f"**⏳ Scraping en cours…**")
+                st.markdown("**⏳ Scraping en cours…**")
                 st.progress(_pct, text=f"Page {_prog['current']} / {_prog['total']} — {_prog['doctors']} médecins")
+                st.caption("La page se rafraîchit automatiquement.")
         except Exception:
             pass
 
     st.markdown("---")
     st.info("Source: DabaDoc.com — Maroc")
     st.caption(f"API: `{API_BASE}`")
+
+    # Auto-refresh every 3s while scraping is running
+    try:
+        import json as _j
+        from pathlib import Path as _P
+        _p = _j.loads(_P("data/scraping_progress.json").read_text())
+        if not _p.get("done", True):
+            import time as _t
+            _t.sleep(3)
+            st.rerun()
+    except Exception:
+        pass
 
 # ── Main ───────────────────────────────────────────────────────────────────
 st.title("🩺 Morocco Medical Data Intelligence")
