@@ -116,7 +116,7 @@ with st.sidebar:
             def _run_scraper():
                 subprocess.run(
                     [sys.executable, "scraper_dabadoc.py",
-                     "--pages", "1", str(pages_end), "--deep-scrape"],
+                     "--pages", "1", str(pages_end), "--deep-scrape", "--resume"],
                     cwd="."
                 )
             threading.Thread(target=_run_scraper, daemon=True).start()
