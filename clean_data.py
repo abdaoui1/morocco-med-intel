@@ -307,10 +307,7 @@ def run():
     )
 
     # ── 3. Derived columns
-    df["quartier_clean"]   = df.apply(
-        lambda r: q if (q := extract_quartier(r["adresse_complete"])) != "Autre/Inconnu" else r["ville"],
-        axis=1
-    )
+    df["quartier_clean"]   = df["adresse_complete"].apply(extract_quartier)
     df["specialite_clean"] = df["specialite"].apply(standardize_specialty)
     df["doctor_id"]        = df["nom_professionnel"].apply(anonymize_name)
     df["source"]           = "DabaDoc"
