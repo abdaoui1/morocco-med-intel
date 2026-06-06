@@ -116,7 +116,7 @@ with st.sidebar:
             def _run_scraper():
                 subprocess.run(
                     [sys.executable, "scraper_dabadoc.py",
-                     "--pages", "1", str(pages_end), "--deep-scrape", "--resume"],
+                     "--pages", "1", str(pages_end), "--resume"],
                     cwd="."
                 )
             threading.Thread(target=_run_scraper, daemon=True).start()
@@ -165,6 +165,16 @@ with st.sidebar:
                         st.cache_data.clear()
                     else:
                         st.error(proc2.stdout[-800:] + proc2.stderr[-800:])
+                if st.button("🔬 Enrichir adresses manquantes"):
+                    import threading, sys, json as _je
+                    from pathlib import Path as _PE
+                    _PE("data/scraping_progress.json").write_text(
+                        _je.dumps({"current": 0, "total": 1, "doctors": _prog["doctors"], "done": False, "phase": "enrich"})
+                    )
+                    def _run_enrich():
+                        subprocess.run([sys.executable, "scraper_dabadoc.py", "--enrich-missing"], cwd=".")
+                    threading.Thread(target=_run_enrich, daemon=True).start()
+                    st.success("✅ Enrichissement lancé!")
             else:
                 st.markdown("**⏳ Scraping en cours…**")
                 st.progress(_pct, text=f"Page {_prog['current']} / {_prog['total']} — {_prog['doctors']} médecins")

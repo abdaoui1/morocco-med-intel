@@ -196,10 +196,12 @@ def scrape(start: int, end: int, delay: tuple, workers: int, deep: bool, output:
     )
     total_pages = end - start + 1
 
+    first_save = True  # track if we've written the header yet
+
     for i, page in enumerate(range(start, end + 1), 1):
         logging.info(f"Page {i}/{total_pages} (page {page})…")
         progress_file.write_text(
-            f'{{"current": {i}, "total": {total_pages}, "doctors": {len(doctors)}, "done": false}}'
+            f'{{"current": {i}, "total": {total_pages}, "doctors": {len(doctors) + len(seen_names)}, "done": false}}'
         )
         html = fetch(session, SEARCH_URL.format(page=page))
         if not html:
@@ -207,62 +209,195 @@ def scrape(start: int, end: int, delay: tuple, workers: int, deep: bool, output:
         for d in parse_search_page(html):
             if d.nom_professionnel and d.nom_professionnel not in seen_names:
                 doctors.append(d)
+                seen_names.add(d.nom_professionnel)
         time.sleep(random.uniform(*delay))
-        if page % 50 == 0:
+        # Incremental save every 50 pages
+        if i % 50 == 0:
             session = make_session()
+            if doctors:
+                _mode = "w" if first_save and not (resume and out.exists()) else "a"
+                with open(out, _mode, newline="", encoding="utf-8") as f:
+                    writer = csv.DictWriter(f, fieldnames=FIELD_NAMES)
+                    if _mode == "w":
+                        writer.writeheader()
+                    for d in doctors:
+                        writer.writerow({
+                            "nom_professionnel": d.nom_professionnel or "Inconnu",
+                            "profile_url": d.profile_url or "",
+                            "specialite": d.specialite or "Généraliste",
+                            "ville": d.ville or "Non spécifiée",
+                            "adresse_complete": d.adresse_complete or "",
+                            "latitude": d.latitude or "",
+                            "longitude": d.longitude or "",
+                            "nb_avis": d.nb_avis if d.nb_avis is not None else "",
+                            "consultation_cabinet": int(d.consultation_cabinet),
+                            "consultation_video": int(d.consultation_video),
+                            "consultation_domicile": int(d.consultation_domicile),
+                        })
+                logging.info(f"💾 Incremental save: {len(doctors)} new doctors written")
+                first_save = False
+                doctors = []  # clear buffer after save
 
-    if deep and doctors:
-        logging.info(f"Deep scraping {len(doctors)} profile pages…")
+    if deep:
+        # Reload all newly scraped doctors from file for deep scraping
+        all_new = []
+        if out.exists():
+            with open(out, newline="", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    if not row.get("adresse_complete", "").strip():
+                        all_new.append(Doctor(
+                            nom_professionnel=row["nom_professionnel"],
+                            profile_url=row["profile_url"],
+                            specialite=row["specialite"],
+                            ville=row["ville"],
+                        ))
+        if all_new:
+            logging.info(f"Deep scraping {len(all_new)} profile pages…")
 
-        def _enrich(doc: Doctor) -> Doctor:
-            if not doc.profile_url:
+            def _enrich(doc: Doctor) -> Doctor:
+                if not doc.profile_url:
+                    return doc
+                s = make_session()  # thread-safe: one session per thread
+                html = fetch(s, doc.profile_url)
+                if html:
+                    doc = parse_profile_page(html, doc)
+                time.sleep(random.uniform(0.5, 1.5))
                 return doc
-            html = fetch(session, doc.profile_url)
-            if html:
-                doc = parse_profile_page(html, doc)
-            time.sleep(random.uniform(0.5, 1.5))
-            return doc
 
-        enriched = []
-        with ThreadPoolExecutor(max_workers=workers) as ex:
-            futures = {ex.submit(_enrich, d): d for d in doctors}
-            for f in as_completed(futures):
-                enriched.append(f.result())
-        doctors = enriched
+            enriched: dict = {}
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                futures = {ex.submit(_enrich, d): d for d in all_new}
+                for fut in as_completed(futures):
+                    d = fut.result()
+                    enriched[d.nom_professionnel] = d
 
-    # Deduplicate
-    seen: dict = {}
-    for d in doctors:
-        if d.nom_professionnel and d.nom_professionnel not in seen:
-            seen[d.nom_professionnel] = d
-    doctors = list(seen.values())
+            # Update CSV with enriched data
+            if out.exists():
+                with open(out, newline="", encoding="utf-8") as f:
+                    rows = list(csv.DictReader(f))
+                with open(out, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.DictWriter(f, fieldnames=FIELD_NAMES)
+                    writer.writeheader()
+                    for row in rows:
+                        d = enriched.get(row["nom_professionnel"])
+                        if d:
+                            row["adresse_complete"]     = d.adresse_complete or row["adresse_complete"]
+                            row["latitude"]             = d.latitude or row["latitude"]
+                            row["longitude"]            = d.longitude or row["longitude"]
+                            row["nb_avis"]              = d.nb_avis if d.nb_avis is not None else row["nb_avis"]
+                            row["consultation_cabinet"] = int(d.consultation_cabinet)
+                            row["consultation_video"]   = int(d.consultation_video)
+                            row["consultation_domicile"]= int(d.consultation_domicile)
+                        writer.writerow(row)
+            logging.info(f"✅ Deep scrape complete — {len(enriched)} profiles enriched")
 
-    mode = "a" if resume and seen_names else "w"
-    with open(out, mode, newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELD_NAMES)
-        if mode == "w":
-            writer.writeheader()
-        for d in doctors:
-            writer.writerow({
-                "nom_professionnel":     d.nom_professionnel or "Inconnu",
-                "profile_url":           d.profile_url or "",
-                "specialite":            d.specialite or "Généraliste",
-                "ville":                 d.ville or "Non spécifiée",
-                "adresse_complete":      d.adresse_complete or "",
-                "latitude":              d.latitude or "",
-                "longitude":             d.longitude or "",
-                "nb_avis":               d.nb_avis if d.nb_avis is not None else "",
-                "consultation_cabinet":  int(d.consultation_cabinet),
-                "consultation_video":    int(d.consultation_video),
-                "consultation_domicile": int(d.consultation_domicile),
-            })
-
-    logging.info(f"✅ Saved {len(doctors)} doctors → {out.resolve()}")
+    # Final save — remaining doctors not yet written (last batch < 50 pages)
+    if doctors:
+        _mode = "w" if first_save and not (resume and out.exists()) else "a"
+        with open(out, _mode, newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=FIELD_NAMES)
+            if _mode == "w":
+                writer.writeheader()
+            for d in doctors:
+                writer.writerow({
+                    "nom_professionnel":     d.nom_professionnel or "Inconnu",
+                    "profile_url":           d.profile_url or "",
+                    "specialite":            d.specialite or "Généraliste",
+                    "ville":                 d.ville or "Non spécifiée",
+                    "adresse_complete":      d.adresse_complete or "",
+                    "latitude":              d.latitude or "",
+                    "longitude":             d.longitude or "",
+                    "nb_avis":               d.nb_avis if d.nb_avis is not None else "",
+                    "consultation_cabinet":  int(d.consultation_cabinet),
+                    "consultation_video":    int(d.consultation_video),
+                    "consultation_domicile": int(d.consultation_domicile),
+                })
+        logging.info(f"✅ Final save: {len(doctors)} doctors written")
     progress_file = Path("data/scraping_progress.json")
-    if progress_file.exists():
-        progress_file.write_text(
-            f'{{"current": {end - start + 1}, "total": {end - start + 1}, "doctors": {len(doctors)}, "done": true}}'
-        )
+    total_saved = len(seen_names)
+    progress_file.write_text(
+        f'{{"current": {end - start + 1}, "total": {end - start + 1}, "doctors": {total_saved}, "done": true}}'
+    )
+
+
+def enrich_missing(output: str, workers: int, delay: tuple):
+    """Visit profile pages for doctors that have no address in the raw CSV."""
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    out = Path(output)
+    if not out.exists():
+        logging.error(f"File not found: {out}")
+        return
+
+    df = []
+    with open(out, newline="", encoding="utf-8") as f:
+        df = list(csv.DictReader(f))
+
+    missing = [r for r in df if not r.get("adresse_complete", "").strip()]
+    logging.info(f"Found {len(missing)} doctors without address (out of {len(df)})")
+
+    if not missing:
+        logging.info("Nothing to enrich.")
+        return
+
+    progress_file = Path("data/scraping_progress.json")
+    progress_file.write_text(
+        f'{{"current": 0, "total": {len(missing)}, "doctors": {len(missing)}, "done": false, "phase": "enrich"}}'
+    )
+
+    session = make_session()
+
+    def _enrich_row(row: dict) -> dict:
+        url = row.get("profile_url", "")
+        if not url:
+            return row
+        s = make_session()  # thread-safe: one session per call
+        html = fetch(s, url)
+        if html:
+            doc = Doctor(
+                nom_professionnel=row["nom_professionnel"],
+                profile_url=url,
+                specialite=row.get("specialite"),
+                ville=row.get("ville"),
+            )
+            doc = parse_profile_page(html, doc)
+            if doc.adresse_complete:
+                row["adresse_complete"] = doc.adresse_complete
+            if doc.latitude:
+                row["latitude"] = doc.latitude
+                row["longitude"] = doc.longitude
+            if doc.nb_avis:
+                row["nb_avis"] = doc.nb_avis
+            row["consultation_cabinet"]  = int(doc.consultation_cabinet)
+            row["consultation_video"]    = int(doc.consultation_video)
+            row["consultation_domicile"] = int(doc.consultation_domicile)
+        time.sleep(random.uniform(*delay))
+        return row
+
+    enriched_map = {r["nom_professionnel"]: r for r in df}
+    done = 0
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = {ex.submit(_enrich_row, r): r for r in missing}
+        for fut in as_completed(futures):
+            result = fut.result()
+            enriched_map[result["nom_professionnel"]] = result
+            done += 1
+            if done % 10 == 0 or done == len(missing):
+                progress_file.write_text(
+                    f'{{"current": {done}, "total": {len(missing)}, "doctors": {len(df)}, "done": false, "phase": "enrich"}}'
+                )
+                logging.info(f"Enriched {done}/{len(missing)}")
+
+    # Write back full CSV
+    with open(out, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELD_NAMES)
+        writer.writeheader()
+        for row in enriched_map.values():
+            writer.writerow({k: row.get(k, "") for k in FIELD_NAMES})
+
+    logging.info(f"✅ Enrichment complete — {len(missing)} profiles updated")
+    progress_file.write_text(
+        f'{{"current": {len(missing)}, "total": {len(missing)}, "doctors": {len(df)}, "done": true, "phase": "enrich"}}'
+    )
 
 
 def main():
@@ -273,8 +408,12 @@ def main():
     p.add_argument("--workers",     type=int, default=3)
     p.add_argument("--deep-scrape", action="store_true", help="Fetch profile pages (address, GPS, avis, consultation types)")
     p.add_argument("--resume",      action="store_true")
+    p.add_argument("--enrich-missing", action="store_true", help="Enrich doctors without address in existing CSV")
     args = p.parse_args()
-    scrape(args.pages[0], args.pages[1], tuple(args.delay), args.workers, args.deep_scrape, args.output, args.resume)
+    if args.enrich_missing:
+        enrich_missing(args.output, args.workers, tuple(args.delay))
+    else:
+        scrape(args.pages[0], args.pages[1], tuple(args.delay), args.workers, args.deep_scrape, args.output, args.resume)
 
 
 if __name__ == "__main__":
