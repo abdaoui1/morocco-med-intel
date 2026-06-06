@@ -92,48 +92,64 @@ def clean_address(addr, city) -> str:
 def extract_quartier(addr) -> str:
     if not isinstance(addr, str) or addr == "Non spécifiée":
         return "Autre/Inconnu"
-    
-    # Try to extract explicit "Quartier X" or "Q. X" pattern first
+
+    # 1. Explicit "Quartier X" pattern
     m = re.search(r"\bq(?:uartier)?\.?\s+([A-ZÀ-Ÿa-zà-ÿ][A-ZÀ-Ÿa-zà-ÿ\s\-]{2,20})", addr, re.IGNORECASE)
     if m:
         return m.group(1).strip().title()
 
     clean = normalize_text(addr)
-    for prefix in ["quartier", "bd", "boulevard", "rue", "avenue", "residence", "immeuble", "angle"]:
-        clean = re.sub(r"\b" + prefix + r"\b", "", clean)
+
+    # 2. Known districts (fast lookup for common ones)
     DISTRICTS = {
-        "Maarif":       ["maarif"],
-        "Gauthier":     ["gauthier"],
-        "Agdal":        ["agdal"],
-        "2 Mars":       ["2 mars", "2mars"],
-        "Hay Riad":     ["hay riad", "hay ryad"],
-        "California":   ["california"],
-        "Bourgogne":    ["bourgogne"],
-        "Centre Ville": ["centre ville", "centre-ville"],
-        "Hay Hassani":  ["hay hassani"],
-        "Oasis":        ["oasis"],
-        "Palmier":      ["palmier"],
-        "Inezgane":     ["inezgane", "inzegane"],
-        "Sidi Maarouf": ["sidi maarouf"],
-        "Ain Sebaa":    ["ain sebaa"],
-        "Atlas":        ["atlas"],
-        "Akkari":       ["akkari"],
-        "Hay Nahda":    ["hay nahda", "nahda"],
-        "Diour Jamaa":  ["diour jamaa"],
-        "Les Hôpitaux": ["hopitaux", "hôpitaux"],
-        "Massira":      ["massira"],
-        "Hay Inara":    ["inara"],
-        "Guéliz":       ["gueliz", "guéliz"],
-        "Hivernage":    ["hivernage"],
-        "Mellah":       ["mellah"],
+        "Maarif":           ["maarif"],
+        "Gauthier":         ["gauthier"],
+        "Agdal":            ["agdal"],
+        "2 Mars":           ["2 mars", "2mars"],
+        "Hay Riad":         ["hay riad", "hay ryad"],
+        "California":       ["california"],
+        "Bourgogne":        ["bourgogne"],
+        "Centre Ville":     ["centre ville", "centre-ville"],
+        "Hay Hassani":      ["hay hassani"],
+        "Oasis":            ["oasis"],
+        "Palmier":          ["palmier"],
+        "Inezgane":         ["inezgane", "inzegane"],
+        "Sidi Maarouf":     ["sidi maarouf"],
+        "Ain Sebaa":        ["ain sebaa"],
+        "Atlas":            ["atlas"],
+        "Akkari":           ["akkari"],
+        "Hay Nahda":        ["hay nahda", "nahda"],
+        "Diour Jamaa":      ["diour jamaa"],
+        "Les Hôpitaux":     ["hopitaux", "hôpitaux"],
+        "Massira":          ["massira"],
+        "Hay Inara":        ["inara"],
+        "Guéliz":           ["gueliz", "guéliz"],
+        "Hivernage":        ["hivernage"],
+        "Mellah":           ["mellah"],
+        "Anfa":             ["anfa"],
+        "Racine":           ["racine"],
+        "Route El Jadida":  ["route el jadida"],
+        "Hay Mohammadi":    ["hay mohammadi"],
+        "Derb Sultan":      ["derb sultan"],
     }
     for canon, patterns in DISTRICTS.items():
         if any(p in clean for p in patterns):
             return canon
-    # Fallback: extract Bd/Rue name from original address
-    m2 = re.search(r"\b(?:bd|boulevard|rue|avenue|av)\.?\s*([A-ZÀ-Ÿa-zà-ÿ][A-ZÀ-Ÿa-zà-ÿ\s]{2,25})", addr, re.IGNORECASE)
+
+    # 3. Dynamic extraction — kayakhod awel mot ma3qoul mn l adresse
+    # Kaydor 3la: "Angle X", "Rue X", "Bd X", "Avenue X", "Route X", "Hay X", "Sidi X", "Cite X"
+    m2 = re.search(
+        r"\b(angle|hay|cité|cite|sidi|route|lotissement)\s+([A-ZÀ-Ÿa-zà-ÿ][A-ZÀ-Ÿa-zà-ÿ\s]{2,25}?)(?:\s*[,/\d]|$)",
+        addr, re.IGNORECASE
+    )
     if m2:
-        return m2.group(1).strip().title()
+        return (m2.group(1) + " " + m2.group(2)).strip().title()
+
+    # 4. Bd/Rue name as fallback
+    m3 = re.search(r"\b(?:bd|boulevard|rue|avenue|av)\.?\s*([A-ZÀ-Ÿa-zà-ÿ][A-ZÀ-Ÿa-zà-ÿ\s]{2,25}?)(?:\s*[,/\d]|$)", addr, re.IGNORECASE)
+    if m3:
+        return m3.group(1).strip().title()
+
     return "Autre/Inconnu"
 
 
