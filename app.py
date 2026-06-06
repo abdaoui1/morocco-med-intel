@@ -158,14 +158,6 @@ with st.sidebar:
             _pct  = _prog["current"] / max(_prog["total"], 1)
             if _prog["done"]:
                 st.success(f"✅ Scraping terminé — {_prog['doctors']} médecins collectés")
-                if st.button("🧹 Lancer Clean + DQV"):
-                    import sys
-                    proc2 = subprocess.run([sys.executable, "clean_data.py"], capture_output=True, text=True, cwd=".")
-                    if proc2.returncode == 0:
-                        st.success("✅ Clean terminé!")
-                        st.cache_data.clear()
-                    else:
-                        st.error(proc2.stdout[-800:] + proc2.stderr[-800:])
                 if st.button("🔬 Enrichir adresses manquantes"):
                     import threading, sys, json as _je
                     from pathlib import Path as _PE
@@ -176,6 +168,14 @@ with st.sidebar:
                         subprocess.run([sys.executable, "scraper_dabadoc.py", "--enrich-missing"], cwd=".")
                     threading.Thread(target=_run_enrich, daemon=True).start()
                     st.success("✅ Enrichissement lancé!")
+                if st.button("🧹 Lancer Clean + DQV"):
+                    import sys
+                    proc2 = subprocess.run([sys.executable, "clean_data.py"], capture_output=True, text=True, cwd=".")
+                    if proc2.returncode == 0:
+                        st.success("✅ Clean terminé!")
+                        st.cache_data.clear()
+                    else:
+                        st.error(proc2.stdout[-800:] + proc2.stderr[-800:])
             else:
                 phase = _prog.get("phase", "scrape")
                 if phase == "enrich":
