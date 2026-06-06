@@ -60,7 +60,7 @@ h1, h2, h3 { color: #1b2746; }
 
 # ── API helpers ────────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=60)
 def api_get(path: str, params: dict = None):
     try:
         r = requests.get(f"{API_BASE}{path}", params=params, timeout=10)
@@ -243,7 +243,7 @@ with tab1:
     villes_list = ["Toutes"] + [v["ville"] for v in villes_data]
     specs_list  = ["Toutes"] + [s["specialite"] for s in specs_data]
 
-    f1, f2, f3 = st.columns([2, 2, 1])
+    f1, f2 = st.columns([2, 2])
     sel_ville = f1.selectbox("Ville", villes_list, key="d_ville")
     sel_spec  = f2.selectbox("Spécialité", specs_list, key="d_spec")
 
@@ -253,16 +253,23 @@ with tab1:
         st.session_state["_last_filter"] = filter_key
         st.session_state["_cur_page"] = 1
 
-    # Get total first to show max pages
+    # Get total
     _params_count = {"page": 1, "limit": 1}
     if sel_ville != "Toutes": _params_count["ville"] = sel_ville
     if sel_spec  != "Toutes": _params_count["specialite"] = sel_spec
     _total = (api_get("/medecins", _params_count) or {}).get("total", 0)
     _max_page = max(1, -(-_total // 50))
 
-    sel_page = f3.number_input("Page", min_value=1, max_value=_max_page,
-                               value=st.session_state.get("_cur_page", 1))
-    st.session_state["_cur_page"] = sel_page
+    cur_page = st.session_state.get("_cur_page", 1)
+    p1, p2, p3 = st.columns([1, 4, 1])
+    if p1.button("◀", disabled=cur_page <= 1):
+        st.session_state["_cur_page"] = cur_page - 1
+        st.rerun()
+    p2.caption(f"{_total} médecins trouvés — page {cur_page} / {_max_page}")
+    if p3.button("▶", disabled=cur_page >= _max_page):
+        st.session_state["_cur_page"] = cur_page + 1
+        st.rerun()
+    sel_page = st.session_state.get("_cur_page", 1)
 
     params = {"page": sel_page, "limit": 50}
     if sel_ville != "Toutes": params["ville"] = sel_ville
