@@ -341,7 +341,7 @@ def enrich_missing(output: str, workers: int, delay: tuple):
 
     progress_file = Path("data/scraping_progress.json")
     progress_file.write_text(
-        f'{{"current": 0, "total": {len(missing)}, "doctors": {len(missing)}, "done": false, "phase": "enrich"}}'
+        f'{{"current": 0, "total": {len(missing)}, "doctors": {len(df)}, "done": false, "phase": "enrich", "enrich_total": {len(missing)}}}'
     )
 
     session = make_session()

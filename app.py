@@ -97,9 +97,10 @@ with st.sidebar:
     try:
         import json as _jd
         from pathlib import Path as _Pd
-        _last = _jd.loads(_Pd("data/scraping_progress.json").read_text()).get("total", 10)
+        _prog_data = _jd.loads(_Pd("data/scraping_progress.json").read_text())
+        _last = _prog_data.get("total", 1297) if _prog_data.get("phase") != "enrich" else 1297
     except Exception:
-        _last = 10
+        _last = 1297
 
     col_pages, col_btn = st.columns([1, 1])
     pages_end = col_pages.number_input("Total pages", min_value=1, max_value=1297, value=_last, step=10)
@@ -176,8 +177,14 @@ with st.sidebar:
                     threading.Thread(target=_run_enrich, daemon=True).start()
                     st.success("✅ Enrichissement lancé!")
             else:
-                st.markdown("**⏳ Scraping en cours…**")
-                st.progress(_pct, text=f"Page {_prog['current']} / {_prog['total']} — {_prog['doctors']} médecins")
+                phase = _prog.get("phase", "scrape")
+                if phase == "enrich":
+                    _pct = _prog["current"] / max(_prog["total"], 1)
+                    st.markdown("**🔬 Enrichissement en cours…**")
+                    st.progress(_pct, text=f"Profil {_prog['current']} / {_prog['total']} enrichis")
+                else:
+                    st.markdown("**⏳ Scraping en cours…**")
+                    st.progress(_pct, text=f"Page {_prog['current']} / {_prog['total']} — {_prog['doctors']} médecins")
                 st.caption("La page se rafraîchit automatiquement.")
         except Exception:
             pass
