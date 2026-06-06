@@ -20,7 +20,26 @@ from typing import Optional
 from urllib.parse import urljoin
 
 import requests
+import urllib3
+import warnings
 from bs4 import BeautifulSoup
+
+warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
+
+# ── DNS bypass (dabadoc.com domain expired — use known Cloudflare IP) ──────
+_DABADOC_IP   = "104.21.45.130"
+_DABADOC_HOST = "www.dabadoc.com"
+
+from urllib3.util.connection import create_connection as _orig_create_connection
+import urllib3.util.connection as _urllib3_conn
+
+def _patched_create_connection(address, *args, **kwargs):
+    host, port = address
+    if host == _DABADOC_HOST:
+        host = _DABADOC_IP
+    return _orig_create_connection((host, port), *args, **kwargs)
+
+_urllib3_conn.create_connection = _patched_create_connection
 
 BASE_URL   = "https://www.dabadoc.com"
 SEARCH_URL = (
@@ -43,7 +62,6 @@ HEADERS_POOL = [
         "Referer": "https://www.dabadoc.com/ma",
     }
 ]
-
 FIELD_NAMES = [
     "nom_professionnel", "profile_url", "specialite", "ville",
     "adresse_complete", "latitude", "longitude",
@@ -67,9 +85,16 @@ class Doctor:
 
 def make_session() -> requests.Session:
     s = requests.Session()
-    h = random.choice(HEADERS_POOL).copy()
+    s.verify = False
+    s.headers.update({
+        "Host": _DABADOC_HOST,
+        "User-Agent": random.choice(HEADERS_POOL)["User-Agent"],
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "fr-FR,fr;q=0.9",
+        "Referer": "https://www.dabadoc.com/ma",
+    })
     try:
-        s.get(f"{BASE_URL}/ma", headers=h, timeout=15)
+        s.get(f"{BASE_URL}/ma", timeout=15)
         time.sleep(random.uniform(0.5, 1.2))
     except Exception:
         pass
@@ -77,9 +102,9 @@ def make_session() -> requests.Session:
 
 
 def fetch(session: requests.Session, url: str, retries: int = 3) -> Optional[str]:
-    h = random.choice(HEADERS_POOL).copy()
     for attempt in range(retries):
         try:
+            h = {"User-Agent": random.choice(HEADERS_POOL)["User-Agent"]}
             r = session.get(url, headers=h, timeout=20, allow_redirects=True)
             if r.status_code == 200:
                 return r.text
@@ -172,6 +197,19 @@ def parse_profile_page(html: str, doc: Doctor) -> Doctor:
                 text = tag.get_text(separator=" ", strip=True)
                 if len(text) > 8:
                     addr = text
+                    break
+
+    # Layout 4: "Autres Lieux de Consultation" — kayakhod awel lieu (clinique/cabinet)
+    if not addr:
+        full_text = soup.get_text(separator="\n")
+        lines = [l.strip() for l in full_text.split("\n") if l.strip()]
+        for i, line in enumerate(lines):
+            if "autres lieux" in line.lower() or "lieu de consultation" in line.lower():
+                for candidate in lines[i+1:i+4]:
+                    if len(candidate) > 5 and "prendre rdv" not in candidate.lower():
+                        addr = candidate
+                        break
+                if addr:
                     break
 
     # Fallback: any line with a street/number pattern near "accès" anywhere in page
