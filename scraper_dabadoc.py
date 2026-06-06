@@ -135,6 +135,15 @@ def parse_search_page(html: str) -> list[Doctor]:
 def parse_profile_page(html: str, doc: Doctor) -> Doctor:
     soup = BeautifulSoup(html, "lxml")
 
+    # Remove "Rendez-vous disponibles" section entirely to avoid parsing other doctors
+    for rdv in soup.select(".availabilities-block, .rdv-block, .booking-block"):
+        rdv.decompose()
+    # Also remove any card that contains "Rendez-vous disponibles" heading
+    for tag in soup.find_all(["div", "section"]):
+        if "rendez-vous disponibles" in tag.get_text(separator=" ", strip=True).lower()[:50]:
+            tag.decompose()
+            break
+
     # Address — try multiple selectors to handle different profile layouts
     addr = None
 
@@ -362,7 +371,12 @@ def enrich_missing(output: str, workers: int, delay: tuple):
     with open(out, newline="", encoding="utf-8") as f:
         df = list(csv.DictReader(f))
 
-    missing = [r for r in df if not r.get("adresse_complete", "").strip()]
+    missing = [
+        r for r in df
+        if not r.get("adresse_complete", "").strip()
+        or r.get("adresse_complete", "").strip() == r.get("ville", "").strip()
+        or r.get("adresse_complete", "").strip() == "Non spécifiée"
+    ]
     logging.info(f"Found {len(missing)} doctors without address (out of {len(df)})")
 
     if not missing:
