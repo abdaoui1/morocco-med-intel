@@ -305,8 +305,6 @@ def run():
     df["adresse_complete"] = df.apply(
         lambda r: clean_address(r.get("adresse_complete", ""), r["ville"]), axis=1
     )
-    # Fallback: li ma 3ndhomch adresse → n3mro b l ville
-    df.loc[df["adresse_complete"] == "Non spécifiée", "adresse_complete"] = df["ville"]
 
     # ── 3. Derived columns
     df["quartier_clean"]   = df.apply(
