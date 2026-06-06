@@ -135,20 +135,50 @@ def parse_search_page(html: str) -> list[Doctor]:
 def parse_profile_page(html: str, doc: Doctor) -> Doctor:
     soup = BeautifulSoup(html, "lxml")
 
-    # Address from info-section (line after "Indications / Détail Accès")
+    # Address — try multiple selectors to handle different profile layouts
+    addr = None
+
+    # Layout 1: address inside a <p> or <div> directly under the accès section
     info = soup.select_one(".info-section")
     if info:
         lines = [l.strip() for l in info.get_text(separator="\n", strip=True).split("\n") if l.strip()]
         for i, line in enumerate(lines):
             if "accès" in line.lower() and i + 1 < len(lines):
-                doc.adresse_complete = lines[i + 1]
+                addr = lines[i + 1]
                 break
-        if not doc.adresse_complete and lines:
-            # Fallback: first line that looks like an address (has a number or "Rue")
-            for line in lines:
-                if re.search(r"\d|rue|bd|avenue|quartier", line, re.I):
-                    doc.adresse_complete = line
+
+    # Layout 2: address next to a map-pin icon (fa-map-marker or similar)
+    if not addr:
+        pin = soup.select_one("i.fa-map-marker, i.fa-location-dot, span.address, .doctor-address")
+        if pin:
+            parent = pin.find_parent()
+            if parent:
+                addr = parent.get_text(separator=" ", strip=True)
+
+    # Layout 3: paragraph inside .indications-section or .access-section
+    if not addr:
+        for sel in [".indications-section p", ".access-section p", ".cabinet-section p"]:
+            tag = soup.select_one(sel)
+            if tag:
+                text = tag.get_text(separator=" ", strip=True)
+                if len(text) > 8:
+                    addr = text
                     break
+
+    # Fallback: any line with a street/number pattern near "accès" anywhere in page
+    if not addr:
+        full_text = soup.get_text(separator="\n")
+        lines = [l.strip() for l in full_text.split("\n") if l.strip()]
+        for i, line in enumerate(lines):
+            if "accès" in line.lower() or "adresse" in line.lower():
+                for candidate in lines[i+1:i+4]:
+                    if re.search(r"\d|rue|bd|avenue|quartier|boulevard", candidate, re.I) and len(candidate) > 8:
+                        addr = candidate
+                        break
+            if addr:
+                break
+
+    doc.adresse_complete = addr
 
     # GPS from Google Maps link
     maps_link = soup.select_one("a[href*='google.com/maps?q=']")

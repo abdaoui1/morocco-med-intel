@@ -283,6 +283,23 @@ with tab1:
             if c in df.columns:
                 col_cfg[c] = st.column_config.CheckboxColumn(c.replace("consultation_", "").title())
         st.dataframe(df, use_container_width=True, column_config=col_cfg)
+        all_params = {"page": 1, "limit": _total}
+        if sel_ville != "Toutes": all_params["ville"] = sel_ville
+        if sel_spec  != "Toutes": all_params["specialite"] = sel_spec
+        all_data = api_get("/medecins", all_params) or {"data": []}
+        df_all = pd.DataFrame(all_data["data"])
+
+        parts = []
+        if sel_ville != "Toutes": parts.append(sel_ville)
+        if sel_spec  != "Toutes": parts.append(sel_spec)
+        fname = "medecins_" + ("_".join(parts) if parts else "tous") + ".csv"
+
+        st.download_button(
+            label=f"⬇️ Télécharger tout ({_total} médecins)",
+            data=df_all.to_csv(index=False).encode("utf-8"),
+            file_name=fname.replace(" ", "_"),
+            mime="text/csv",
+        )
     else:
         st.info("Aucun résultat.")
 
