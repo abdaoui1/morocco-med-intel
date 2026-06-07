@@ -161,7 +161,7 @@ def parse_profile_page(html: str, doc: Doctor) -> Doctor:
     soup = BeautifulSoup(html, "lxml")
 
     # Remove "Rendez-vous disponibles" section entirely to avoid parsing other doctors
-    for rdv in soup.select(".availabilities-block, .rdv-block, .booking-block"):
+    for rdv in soup.select(".availabilities-block, .rdv-block, .booking-block, .card-similar-doctor"):
         rdv.decompose()
     # Also remove any card that contains "Rendez-vous disponibles" heading
     for tag in soup.find_all(["div", "section"]):
