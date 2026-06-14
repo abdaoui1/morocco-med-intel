@@ -105,9 +105,9 @@ def extract_quartier(addr) -> str:
         "2 Mars":           ["2 mars", "2mars"],
         "Hay Riad":         ["hay riad", "hay ryad"],
         "California":       ["california"],
-        "Bourgogne":        ["bourgogne"],
+        "Bourgogne":        ["bourgogne", "bourgognes"],
         "Centre Ville":     ["centre ville", "centre-ville"],
-        "Hay Hassani":      ["hay hassani"],
+        "Hay Hassani":      ["hay hassani", "hay el hassani", "hay elhassani"],
         "Oasis":            ["oasis"],
         "Palmier":          ["palmier"],
         "Inezgane":         ["inezgane", "inzegane"],
@@ -117,7 +117,7 @@ def extract_quartier(addr) -> str:
         "Akkari":           ["akkari"],
         "Hay Nahda":        ["hay nahda", "nahda"],
         "Diour Jamaa":      ["diour jamaa"],
-        "Les Hôpitaux":     ["hopitaux", "hôpitaux"],
+        "Les Hôpitaux":     ["hopitaux", "hôpitaux", "les hopitaux", "des hopitaux"],
         "Massira":          ["massira"],
         "Hay Inara":        ["inara"],
         "Guéliz":           ["gueliz", "guéliz"],
@@ -126,27 +126,33 @@ def extract_quartier(addr) -> str:
         "Anfa":             ["anfa"],
         "Racine":           ["racine"],
         "Route El Jadida":  ["route el jadida"],
-        "Hay Mohammadi":    ["hay mohammadi"],
+        "Hay Mohammadi":    ["hay mohammadi", "hay mohamadi", "hay mohammedia"],
         "Derb Sultan":      ["derb sultan"],
+        "Al Qods":          ["al qods", "al quods", "el qods", "el quods", "hay al qods", "hay qods"],
+        "Hay Oulfa":        ["hay oulfa", "hay el oulfa", "hay eloulfa", "el oulfa"],
+        "Sbata":            ["sbata"],
+        "Ain Chock":        ["ain chock", "ain chok"],
+        "Bernoussi":        ["bernoussi"],
+        "Hay Salama":       ["hay salama", "hay essalama"],
+        "Sidi Bernoussi":   ["sidi bernoussi"],
+        "Abdelmoumen":      ["abdelmoumen"],
+        "Belvédère":        ["belveder", "belvedere", "belvédère"],
+        "Mers Sultan":      ["mers sultan"],
+        "El Fida":          ["el fida"],
     }
     for canon, patterns in DISTRICTS.items():
         if any(p in clean for p in patterns):
             return canon
 
-    # 3. Dynamic extraction — kayakhod awel mot ma3qoul mn l adresse
-    # Kaydor 3la: "Angle X", "Rue X", "Bd X", "Avenue X", "Route X", "Hay X", "Sidi X", "Cite X"
+    # 3. Dynamic extraction — Hay/Cite/Sidi/Lotissement only (real neighbourhood prefixes)
     m2 = re.search(
-        r"\b(angle|hay|cité|cite|sidi|route|lotissement)\s+([A-ZÀ-Ÿa-zà-ÿ][A-ZÀ-Ÿa-zà-ÿ\s]{2,25}?)(?:\s*[,/\d]|$)",
+        r"\b(hay|cité|cite|sidi|lotissement)\s+([A-ZÀ-Ÿa-zà-ÿ][A-ZÀ-Ÿa-zà-ÿ\s]{2,20}?)(?:\s*[,/\d]|$)",
         addr, re.IGNORECASE
     )
     if m2:
         return (m2.group(1) + " " + m2.group(2)).strip().title()
 
-    # 4. Bd/Rue name as fallback
-    m3 = re.search(r"\b(?:bd|boulevard|rue|avenue|av)\.?\s*([A-ZÀ-Ÿa-zà-ÿ][A-ZÀ-Ÿa-zà-ÿ\s]{2,25}?)(?:\s*[,/\d]|$)", addr, re.IGNORECASE)
-    if m3:
-        return m3.group(1).strip().title()
-
+    # 4. No reliable match → Autre/Inconnu (don't invent quartiers from street names)
     return "Autre/Inconnu"
 
 

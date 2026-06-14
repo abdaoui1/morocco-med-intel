@@ -131,13 +131,13 @@ def get_gaps(
     df_a = load_analytics()
     spec_col = "specialite_clean" if "specialite_clean" in df_a.columns else "specialite"
 
-    all_q  = set(df[df["ville"].str.lower() == ville.lower()]["quartier_clean"].unique())
+    all_q  = set(df[df["ville"].str.lower() == ville.lower()]["quartier_clean"].unique()) - {"Autre/Inconnu"}
     occ_q  = set(
         df_a[
             (df_a["ville"].str.lower() == ville.lower()) &
             (df_a[spec_col].str.lower() == specialite.lower())
         ]["quartier_clean"].unique()
-    )
+    ) - {"Autre/Inconnu"}
     gaps = sorted(all_q - occ_q)
     return {
         "ville": ville,

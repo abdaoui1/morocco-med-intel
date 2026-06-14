@@ -1,30 +1,22 @@
 {
-  "accuracy": 0.997,
-  "auc_roc": 0.9994,
-  "f1_macro": 0.997,
+  "accuracy": 0.9984,
+  "auc_roc": 0.9997,
+  "f1_macro": 0.9984,
   "feature_importance": {
-    "city_code": 0.5316586734700867,
-    "spec_code": 0.4123140551298251,
-    "longitude_scaled": 0.021063980537486645,
-    "latitude_scaled": 0.013235282033981286,
-    "consultation_cabinet": 0.007166090894043329,
-    "consultation_video": 0.005827439358418511,
-    "district_code": 0.0037543496522737295,
-    "consultation_domicile": 0.002801144303569066,
-    "nb_avis_scaled": 0.0021789846203158552
+    "city_code": 0.5397676233847196,
+    "spec_code": 0.36763134433760464,
+    "district_code": 0.060506270072381955,
+    "longitude_scaled": 0.018301963090745863,
+    "latitude_scaled": 0.013792799114547963
   },
   "features_used": [
     "city_code",
     "spec_code",
     "district_code",
-    "consultation_cabinet",
-    "consultation_video",
-    "consultation_domicile",
-    "nb_avis_scaled",
     "latitude_scaled",
     "longitude_scaled"
   ],
-  "n_train": 14879,
-  "n_test": 3720,
-  "saturated_rate": 0.5029
+  "n_train": 14890,
+  "n_test": 3723,
+  "saturated_rate": 0.5035
 }
