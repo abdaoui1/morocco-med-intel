@@ -157,39 +157,47 @@ with st.sidebar:
             _prog = _json.loads(_prog_file.read_text())
             _pct  = _prog["current"] / max(_prog["total"], 1)
             if _prog["done"]:
-                st.success(f"✅ Scraping terminé — {_prog['doctors']} médecins collectés")
-                if st.button("🔬 Enrichir adresses manquantes (DabaDoc)"):
-                    import threading, sys, json as _je
-                    from pathlib import Path as _PE
-                    _PE("data/scraping_progress.json").write_text(
-                        _je.dumps({"current": 0, "total": 1, "doctors": _prog["doctors"], "done": False, "phase": "enrich"})
-                    )
-                    def _run_enrich():
-                        subprocess.run([sys.executable, "scraper_dabadoc.py", "--enrich-missing"], cwd=".")
-                    threading.Thread(target=_run_enrich, daemon=True).start()
-                    st.success("✅ Enrichissement DabaDoc lancé!")
+                st.success(f"✅ Scraping DabaDoc terminé — {_prog['doctors']} médecins")
 
-                if st.button("🏥 Enrichir via med.ma"):
+                # ── Scraper med.ma
+                if st.button("🏥 Scraper med.ma"):
                     import threading, sys
+                    from pathlib import Path as _PM
+                    import json as _jm
+                    _PM("data/medma_scraping_progress.json").write_text(
+                        _jm.dumps({"current": 0, "total": 0, "doctors": 0, "done": False})
+                    )
                     def _run_medma():
-                        subprocess.run([sys.executable, "enrich_from_medma.py"], cwd=".")
+                        subprocess.run([sys.executable, "scraper_medma.py"], cwd=".")
                     threading.Thread(target=_run_medma, daemon=True).start()
-                    st.success("✅ Enrichissement med.ma lancé! (vérifiez scraper.log)")
+                    st.success("✅ Scraper med.ma lancé!")
 
-                # Barre de progression med.ma
-                _medma_file = _Path("data/medma_progress.json")
-                if _medma_file.exists():
+                # Progression med.ma
+                _medma_prog = _Path("data/medma_scraping_progress.json")
+                if _medma_prog.exists():
                     try:
-                        _mp = _json.loads(_medma_file.read_text())
-                        if _mp.get("done"):
-                            st.success(f"🏥 med.ma terminé — {_mp['enriched']} adresses ajoutées")
-                        elif _mp["total"] > 0:
-                            _pct2 = _mp["current"] / max(_mp["total"], 1)
-                            st.markdown("**⏳ Enrichissement en cours...**")
-                            st.progress(_pct2, text=f"Profil {_mp['current']} / {_mp['total']} enrichis")
+                        _mp = _json.loads(_medma_prog.read_text())
+                        if _mp.get("done") and _mp.get("doctors", 0) > 0:
+                            st.success(f"✅ med.ma terminé — {_mp['doctors']} médecins")
+
+                            # ── Merge
+                            if st.button("🔀 Merger DabaDoc + med.ma"):
+                                import sys
+                                proc_m = subprocess.run([sys.executable, "merge.py"], capture_output=True, text=True, cwd=".")
+                                if proc_m.returncode == 0:
+                                    st.success("✅ Merge terminé!")
+                                else:
+                                    st.error(proc_m.stdout[-500:] + proc_m.stderr[-500:])
+
+                        elif not _mp.get("done") and _mp.get("total", 0) > 0:
+                            _pct_m = _mp["current"] / max(_mp["total"], 1)
+                            st.markdown("**⏳ Scraping med.ma en cours…**")
+                            st.progress(_pct_m, text=f"Profil {_mp['current']} / {_mp['total']} — {_mp['doctors']} médecins")
                             st.caption("La page se rafraîchit automatiquement.")
                     except Exception:
                         pass
+
+                # ── Clean + DQV (après merge)
                 if st.button("🧹 Lancer Clean + DQV"):
                     import sys
                     proc2 = subprocess.run([sys.executable, "clean_data.py"], capture_output=True, text=True, cwd=".")
@@ -239,12 +247,12 @@ with st.sidebar:
     except Exception:
         pass
 
-    # Auto-refresh si enrichissement med.ma en cours
+    # Auto-refresh si scraper med.ma en cours
     try:
-        _medma_p = _Path("data/medma_progress.json")
+        _medma_p = _Path("data/medma_scraping_progress.json")
         if _medma_p.exists():
             _mp = _json.loads(_medma_p.read_text())
-            if not _mp.get("done", True):
+            if not _mp.get("done", True) and _mp.get("total", 0) > 0:
                 import time as _t2
                 _t2.sleep(3)
                 st.rerun()
@@ -263,7 +271,7 @@ c1, c2, c3, c4 = st.columns(4)
 c1.metric("Total Médecins",   stats["total_medecins"])
 c2.metric("Villes Couvertes", stats["total_villes"])
 c3.metric("Spécialités",      stats["total_specialites"] or "—")
-c4.metric("Total Avis",       f"{stats['total_avis']:,}" if stats["total_avis"] else "—")
+c4.metric("Avec GPS",         stats["avec_gps"] or "—")
 
 # ── Tabs ───────────────────────────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Données", "📍 Carte", "📊 Analyse", "💡 Opportunités", "🤖 ML Saturation"])
@@ -318,11 +326,6 @@ with tab1:
         col_cfg = {}
         if "profile_url" in df.columns:
             col_cfg["profile_url"] = st.column_config.LinkColumn("Profil")
-        if "nb_avis" in df.columns:
-            col_cfg["nb_avis"] = st.column_config.NumberColumn("Avis", format="%d ⭐")
-        for c in ["consultation_cabinet", "consultation_video", "consultation_domicile"]:
-            if c in df.columns:
-                col_cfg[c] = st.column_config.CheckboxColumn(c.replace("consultation_", "").title())
         st.dataframe(df, use_container_width=True, column_config=col_cfg)
         all_params = {"page": 1, "limit": _total}
         if sel_ville != "Toutes": all_params["ville"] = sel_ville
@@ -372,7 +375,7 @@ with tab2:
         fig = px.scatter_map(
             df_map, lat="latitude", lon="longitude",
             hover_name="nom_professionnel",
-            hover_data={c: True for c in ["specialite_clean", "ville", "adresse_complete", "nb_avis"] if c in df_map.columns},
+            hover_data={c: True for c in ["specialite_clean", "ville", "adresse_complete"] if c in df_map.columns},
             color=color_col,
             zoom=5, height=550,
             map_style="open-street-map",
@@ -402,15 +405,14 @@ with tab3:
             st.plotly_chart(fig_s, use_container_width=True)
 
     with a2:
-        st.subheader("Top 10 — Plus évalués")
+        st.subheader("Top 10 — Médecins par Quartier")
         top_params = {"limit": 10, "page": 1}
         if sel_ville_m != "Toutes": top_params["ville"] = sel_ville_m
         top_data = api_get("/medecins", top_params)
         if top_data and top_data["data"]:
             df_top = pd.DataFrame(top_data["data"])
-            if "nb_avis" in df_top.columns:
-                df_top = df_top.nlargest(10, "nb_avis")[["nom_professionnel", "specialite_clean", "ville", "nb_avis"]]
-                st.dataframe(df_top, use_container_width=True)
+            cols_show = [c for c in ["nom_professionnel", "specialite_clean", "ville", "quartier_clean"] if c in df_top.columns]
+            st.dataframe(df_top[cols_show].head(10), use_container_width=True)
 
 # ── Tab 4: Opportunités ────────────────────────────────────────────────────
 with tab4:

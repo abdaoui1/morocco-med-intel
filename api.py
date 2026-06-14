@@ -51,7 +51,6 @@ def get_stats():
         "total_medecins": len(df),
         "total_villes":   int(df["ville"].nunique()),
         "total_specialites": int(df["specialite_clean"].nunique()) if "specialite_clean" in df.columns else None,
-        "total_avis":     int(df["nb_avis"].sum()) if "nb_avis" in df.columns else None,
         "avec_gps":       int(df["latitude"].notna().sum()) if "latitude" in df.columns else None,
     }
 
@@ -118,7 +117,7 @@ def get_carte(
         df = df[df["specialite_clean"].str.lower() == specialite.lower()]
 
     cols = ["nom_professionnel", "specialite_clean", "ville", "quartier_clean",
-            "adresse_complete", "nb_avis", "latitude", "longitude"]
+            "adresse_complete", "latitude", "longitude"]
     cols = [c for c in cols if c in df.columns]
     return df[cols].fillna("").to_dict(orient="records")
 

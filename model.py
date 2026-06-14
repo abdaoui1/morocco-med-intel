@@ -27,8 +27,7 @@ REPORT_PATH   = MODELS_DIR / "saturation_report.json"
 
 FEATURES = [
     "city_code", "spec_code", "district_code",
-    "consultation_cabinet", "consultation_video", "consultation_domicile",
-    "nb_avis_scaled", "latitude_scaled", "longitude_scaled",
+    "latitude_scaled", "longitude_scaled",
 ]
 
 
@@ -40,9 +39,10 @@ def build_dataset() -> pd.DataFrame:
     """
     df = pd.read_csv(MODELING_PATH)
 
-    # Count doctors per zone
+    # Count doctors per zone using clean data (not analytics which is exploded per specialty)
     zone_counts = (
         pd.read_csv(ANALYTICS_PATH)
+        .drop_duplicates(subset=["doctor_id", "ville", "specialite_clean", "quartier_clean"])
         .groupby(["ville", "specialite_clean", "quartier_clean"])
         .size()
         .reset_index(name="zone_count")
@@ -144,7 +144,7 @@ def predict_zone(ville: str, specialite: str, quartier: str) -> dict:
     if row.empty:
         return {"error": "No data available for this combination"}
 
-    X = row[available].mean().to_frame().T
+    X = row[available].mean().to_frame().T.fillna(0)
 
     prob = model.predict_proba(X)[0][1]
     label = "🔴 Saturé" if prob >= 0.5 else "🟢 Opportunité"

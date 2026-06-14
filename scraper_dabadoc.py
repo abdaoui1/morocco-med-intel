@@ -2,9 +2,8 @@
 """
 DabaDoc.com - Medical Doctors Scraper for Morocco
 ==================================================
-Output columns: nom_professionnel, profile_url, specialite, ville, adresse_complete,
-                latitude, longitude, nb_avis, consultation_cabinet, consultation_video,
-                consultation_domicile
+Output columns: nom_professionnel, profile_url, specialite, ville,
+                adresse_complete, latitude, longitude
 """
 
 import argparse
@@ -65,7 +64,6 @@ HEADERS_POOL = [
 FIELD_NAMES = [
     "nom_professionnel", "profile_url", "specialite", "ville",
     "adresse_complete", "latitude", "longitude",
-    "nb_avis", "consultation_cabinet", "consultation_video", "consultation_domicile"
 ]
 
 @dataclass
@@ -77,10 +75,6 @@ class Doctor:
     adresse_complete:      Optional[str] = None
     latitude:              Optional[str] = None
     longitude:             Optional[str] = None
-    nb_avis:               Optional[int] = None
-    consultation_cabinet:  bool = False
-    consultation_video:    bool = False
-    consultation_domicile: bool = False
 
 
 def make_session() -> requests.Session:
@@ -235,19 +229,6 @@ def parse_profile_page(html: str, doc: Doctor) -> Doctor:
             doc.latitude  = m.group(1)
             doc.longitude = m.group(2)
 
-    # Number of avis
-    reviews = soup.select(".review-holder")
-    doc.nb_avis = len(reviews)
-
-    # Consultation types
-    consult_text = " ".join(
-        t.get_text(strip=True).lower()
-        for t in soup.select(".dl-text-body, .cabinet-section")
-    )
-    doc.consultation_cabinet  = "cabinet" in consult_text
-    doc.consultation_video    = "vidéo" in consult_text or "video" in consult_text
-    doc.consultation_domicile = "domicile" in consult_text
-
     return doc
 
 
@@ -306,10 +287,6 @@ def scrape(start: int, end: int, delay: tuple, workers: int, deep: bool, output:
                             "adresse_complete": d.adresse_complete or "",
                             "latitude": d.latitude or "",
                             "longitude": d.longitude or "",
-                            "nb_avis": d.nb_avis if d.nb_avis is not None else "",
-                            "consultation_cabinet": int(d.consultation_cabinet),
-                            "consultation_video": int(d.consultation_video),
-                            "consultation_domicile": int(d.consultation_domicile),
                         })
                 logging.info(f"💾 Incremental save: {len(doctors)} new doctors written")
                 first_save = False
@@ -358,13 +335,9 @@ def scrape(start: int, end: int, delay: tuple, workers: int, deep: bool, output:
                     for row in rows:
                         d = enriched.get(row["nom_professionnel"])
                         if d:
-                            row["adresse_complete"]     = d.adresse_complete or row["adresse_complete"]
-                            row["latitude"]             = d.latitude or row["latitude"]
-                            row["longitude"]            = d.longitude or row["longitude"]
-                            row["nb_avis"]              = d.nb_avis if d.nb_avis is not None else row["nb_avis"]
-                            row["consultation_cabinet"] = int(d.consultation_cabinet)
-                            row["consultation_video"]   = int(d.consultation_video)
-                            row["consultation_domicile"]= int(d.consultation_domicile)
+                            row["adresse_complete"] = d.adresse_complete or row["adresse_complete"]
+                            row["latitude"]         = d.latitude or row["latitude"]
+                            row["longitude"]        = d.longitude or row["longitude"]
                         writer.writerow(row)
             logging.info(f"✅ Deep scrape complete — {len(enriched)} profiles enriched")
 
@@ -384,10 +357,6 @@ def scrape(start: int, end: int, delay: tuple, workers: int, deep: bool, output:
                     "adresse_complete":      d.adresse_complete or "",
                     "latitude":              d.latitude or "",
                     "longitude":             d.longitude or "",
-                    "nb_avis":               d.nb_avis if d.nb_avis is not None else "",
-                    "consultation_cabinet":  int(d.consultation_cabinet),
-                    "consultation_video":    int(d.consultation_video),
-                    "consultation_domicile": int(d.consultation_domicile),
                 })
         logging.info(f"✅ Final save: {len(doctors)} doctors written")
     progress_file = Path("data/scraping_progress.json")
@@ -447,11 +416,6 @@ def enrich_missing(output: str, workers: int, delay: tuple):
             if doc.latitude:
                 row["latitude"] = doc.latitude
                 row["longitude"] = doc.longitude
-            if doc.nb_avis:
-                row["nb_avis"] = doc.nb_avis
-            row["consultation_cabinet"]  = int(doc.consultation_cabinet)
-            row["consultation_video"]    = int(doc.consultation_video)
-            row["consultation_domicile"] = int(doc.consultation_domicile)
         time.sleep(random.uniform(*delay))
         return row
 
