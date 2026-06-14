@@ -417,26 +417,46 @@ with tab3:
 # ── Tab 4: Opportunités ────────────────────────────────────────────────────
 with tab4:
     st.header("💡 Gaps — Zones sans Concurrence")
-    st.markdown("Trouvez les quartiers d'une ville sans médecin pour votre spécialité.")
 
-    villes_data2 = api_get("/villes") or []
-    specs_data2  = api_get("/specialites") or []
+    # Check quartier coverage quality
+    _gaps_ok = True
+    try:
+        import pandas as _pd
+        _df_check = _pd.read_csv("data/processed/dabadoc_clean.csv")
+        _inconnu_pct = (_df_check["quartier_clean"] == "Autre/Inconnu").mean()
+        if _inconnu_pct > 0.5:
+            st.warning(
+                f"⚠️ **Données insuffisantes pour l'analyse des gaps** — "
+                f"{_inconnu_pct:.0%} des médecins n'ont pas d'adresse connue. "
+                f"Lancez le scraper med.ma complet puis re-mergez pour activer cette fonctionnalité."
+            )
+            _gaps_ok = False
+    except Exception:
+        pass
 
-    g1, g2 = st.columns(2)
-    sel_gville = g1.selectbox("Ville", [v["ville"] for v in villes_data2], key="g_ville")
-    sel_gspec  = g2.selectbox("Spécialité", [s["specialite"] for s in specs_data2], key="g_spec")
+    if _gaps_ok:
 
-    if st.button("🔍 Analyser les gaps"):
-        gaps = api_get("/gaps", {"ville": sel_gville, "specialite": sel_gspec})
-        if gaps:
-            st.metric("Quartiers sans concurrence", gaps["total_gaps"])
-            if gaps["quartiers_sans_concurrence"]:
-                st.success("Zones d'opportunité :")
-                cols = st.columns(3)
-                for i, q in enumerate(gaps["quartiers_sans_concurrence"]):
-                    cols[i % 3].write(f"📍 {q}")
-            else:
-                st.info("Marché saturé dans tous les quartiers connus.")
+    if _gaps_ok:
+        st.markdown("Trouvez les quartiers d'une ville sans médecin pour votre spécialité.")
+
+        villes_data2 = api_get("/villes") or []
+        specs_data2  = api_get("/specialites") or []
+
+        g1, g2 = st.columns(2)
+        sel_gville = g1.selectbox("Ville", [v["ville"] for v in villes_data2], key="g_ville")
+        sel_gspec  = g2.selectbox("Spécialité", [s["specialite"] for s in specs_data2], key="g_spec")
+
+        if st.button("🔍 Analyser les gaps"):
+            gaps = api_get("/gaps", {"ville": sel_gville, "specialite": sel_gspec})
+            if gaps:
+                st.metric("Quartiers sans concurrence", gaps["total_gaps"])
+                if gaps["quartiers_sans_concurrence"]:
+                    st.success("Zones d'opportunité :")
+                    cols = st.columns(3)
+                    for i, q in enumerate(gaps["quartiers_sans_concurrence"]):
+                        cols[i % 3].write(f"📍 {q}")
+                else:
+                    st.info("Marché saturé dans tous les quartiers connus.")
 
 
 # ── Tab 5: ML Saturation ───────────────────────────────────────────────────
