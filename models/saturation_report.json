@@ -1,17 +1,17 @@
 {
-  "accuracy": 0.7333,
-  "auc_roc": 0.6705,
-  "f1_macro": 0.6591,
+  "accuracy": 0.997,
+  "auc_roc": 0.9994,
+  "f1_macro": 0.997,
   "feature_importance": {
-    "spec_code": 0.29886049211484284,
-    "longitude_scaled": 0.2760593754139028,
-    "latitude_scaled": 0.2022264311898833,
-    "district_code": 0.14298913093426682,
-    "nb_avis_scaled": 0.06651534564568733,
-    "consultation_video": 0.006956710383498094,
-    "consultation_domicile": 0.004345303878252404,
-    "consultation_cabinet": 0.0020472104396665005,
-    "city_code": 0.0
+    "city_code": 0.5316586734700867,
+    "spec_code": 0.4123140551298251,
+    "longitude_scaled": 0.021063980537486645,
+    "latitude_scaled": 0.013235282033981286,
+    "consultation_cabinet": 0.007166090894043329,
+    "consultation_video": 0.005827439358418511,
+    "district_code": 0.0037543496522737295,
+    "consultation_domicile": 0.002801144303569066,
+    "nb_avis_scaled": 0.0021789846203158552
   },
   "features_used": [
     "city_code",
@@ -24,7 +24,7 @@
     "latitude_scaled",
     "longitude_scaled"
   ],
-  "n_train": 60,
-  "n_test": 15,
-  "saturated_rate": 0.7067
+  "n_train": 14879,
+  "n_test": 3720,
+  "saturated_rate": 0.5029
 }

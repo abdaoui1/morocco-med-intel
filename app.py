@@ -158,7 +158,7 @@ with st.sidebar:
             _pct  = _prog["current"] / max(_prog["total"], 1)
             if _prog["done"]:
                 st.success(f"✅ Scraping terminé — {_prog['doctors']} médecins collectés")
-                if st.button("🔬 Enrichir adresses manquantes"):
+                if st.button("🔬 Enrichir adresses manquantes (DabaDoc)"):
                     import threading, sys, json as _je
                     from pathlib import Path as _PE
                     _PE("data/scraping_progress.json").write_text(
@@ -167,7 +167,29 @@ with st.sidebar:
                     def _run_enrich():
                         subprocess.run([sys.executable, "scraper_dabadoc.py", "--enrich-missing"], cwd=".")
                     threading.Thread(target=_run_enrich, daemon=True).start()
-                    st.success("✅ Enrichissement lancé!")
+                    st.success("✅ Enrichissement DabaDoc lancé!")
+
+                if st.button("🏥 Enrichir via med.ma"):
+                    import threading, sys
+                    def _run_medma():
+                        subprocess.run([sys.executable, "enrich_from_medma.py"], cwd=".")
+                    threading.Thread(target=_run_medma, daemon=True).start()
+                    st.success("✅ Enrichissement med.ma lancé! (vérifiez scraper.log)")
+
+                # Barre de progression med.ma
+                _medma_file = _Path("data/medma_progress.json")
+                if _medma_file.exists():
+                    try:
+                        _mp = _json.loads(_medma_file.read_text())
+                        if _mp.get("done"):
+                            st.success(f"🏥 med.ma terminé — {_mp['enriched']} adresses ajoutées")
+                        elif _mp["total"] > 0:
+                            _pct2 = _mp["current"] / max(_mp["total"], 1)
+                            st.markdown("**⏳ Enrichissement en cours...**")
+                            st.progress(_pct2, text=f"Profil {_mp['current']} / {_mp['total']} enrichis")
+                            st.caption("La page se rafraîchit automatiquement.")
+                    except Exception:
+                        pass
                 if st.button("🧹 Lancer Clean + DQV"):
                     import sys
                     proc2 = subprocess.run([sys.executable, "clean_data.py"], capture_output=True, text=True, cwd=".")
@@ -213,6 +235,18 @@ with st.sidebar:
             elif not _p.get("done", True) and _scraper_running:
                 import time as _t
                 _t.sleep(3)
+                st.rerun()
+    except Exception:
+        pass
+
+    # Auto-refresh si enrichissement med.ma en cours
+    try:
+        _medma_p = _Path("data/medma_progress.json")
+        if _medma_p.exists():
+            _mp = _json.loads(_medma_p.read_text())
+            if not _mp.get("done", True):
+                import time as _t2
+                _t2.sleep(3)
                 st.rerun()
     except Exception:
         pass

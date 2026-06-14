@@ -10,3 +10,5 @@ scikit-learn==1.8.0
 joblib==1.5.3
 dvc==3.67.1
 psutil
+playwright==1.49.0
+rapidfuzz==3.10.1
