@@ -18,7 +18,9 @@ import joblib
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-RAW_PATH       = Path("data/raw/merged_raw.csv")
+_MERGED_PATH   = Path("data/raw/merged_raw.csv")
+_DABADOC_PATH  = Path("data/raw/dabadoc_raw.csv")
+RAW_PATH       = _MERGED_PATH if _MERGED_PATH.exists() else _DABADOC_PATH
 CLEAN_PATH     = Path("data/processed/dabadoc_clean.csv")
 ANALYTICS_PATH = Path("data/processed/dabadoc_analytics.csv")
 MODELING_PATH  = Path("data/processed/dabadoc_modeling.csv")
@@ -29,7 +31,7 @@ DQV_MISSING_THRESHOLD = 0.15   # <15% missing per feature
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 def anonymize_name(name: str) -> str:
-    return hashlib.sha256(str(name).encode()).hexdigest()[:10]
+    return hashlib.sha256(str(name).encode()).hexdigest()[:16]
 
 
 def normalize_text(text: str) -> str:
@@ -75,14 +77,28 @@ def standardize_specialty(spec) -> str:
     return spec.split(",")[0].strip().capitalize()
 
 
+_SPEC_PATTERN = re.compile(
+    r",?\s*(gynécolog\w*|chirurgi\w*|cardiolog\w*|dermatolog\w*|pédiatr\w*|"
+    r"ophtalmolog\w*|psychiatr\w*|neurologu\w*|radiolog\w*|urologu\w*|"
+    r"généraliste\w*|dentiste\w*|orthopédi\w*|pneumolog\w*|rhumatolog\w*|"
+    r"endocrinolog\w*|gastro[\w-]*|médecin\w*|stomatolog\w*|anesthési\w*|"
+    r"oncolog\w*|nephrog\w*|infectiolog\w*)[\w\s,/-]*$",
+    re.IGNORECASE,
+)
+
+
 def clean_address(addr, city) -> str:
     if not isinstance(addr, str) or not addr.strip():
         return "Non spécifiée"
     addr = re.sub(r"\bmaroc\b", "", addr, flags=re.IGNORECASE)
     if isinstance(city, str) and city.lower() not in ("non spécifiée", ""):
         addr = re.sub(re.escape(city), "", addr, flags=re.IGNORECASE)
+    # Strip specialty names that bleed into address (scraper artefact)
+    addr = _SPEC_PATTERN.sub("", addr)
     addr = re.sub(r"[\s,.-]+$", "", addr).strip()
     addr = re.sub(r",\s*\d{5}\s*$", "", addr).strip()
+    # Remove double commas left behind
+    addr = re.sub(r",\s*,", ",", addr).strip(" ,")
     return addr or "Non spécifiée"
 
 
@@ -197,7 +213,6 @@ def run_dqv(df: pd.DataFrame) -> bool:
         invalid_lon = ((df_gps["longitude"] < -14) | (df_gps["longitude"] > -1)).sum()
         if invalid_lat + invalid_lon > 0:
             print(f"  ⚠️  WARNING — GPS: {invalid_lat} invalid latitudes, {invalid_lon} invalid longitudes (will be nullified)")
-            df.loc[(df["latitude"] < 27) | (df["latitude"] > 36), ["latitude","longitude"]] = None
         else:
             print(f"  ✅ GPS: all coordinates within Morocco bounds")
     if "specialite" in df.columns:
@@ -273,12 +288,15 @@ def dvc_commit_and_tag(version: str = "v1.0-anonymized"):
 def run():
     print("📋 Starting DabaDoc Cleaning Pipeline…")
 
-    if not RAW_PATH.exists():
-        print(f"❌ Raw file not found: {RAW_PATH}")
+    raw_path = _MERGED_PATH if _MERGED_PATH.exists() else _DABADOC_PATH
+    if not raw_path.exists():
+        print(f"❌ Raw file not found. Expected: {_MERGED_PATH} or {_DABADOC_PATH}")
         return
+    if raw_path == _DABADOC_PATH:
+        print(f"⚠️  merged_raw.csv not found — falling back to {_DABADOC_PATH}")
 
-    df = pd.read_csv(RAW_PATH)
-    print(f"📥 Loaded {len(df)} records from {RAW_PATH}")
+    df = pd.read_csv(raw_path)
+    print(f"📥 Loaded {len(df)} records from {raw_path}")
 
     # ── 1. Basic cleaning
     df["nom_professionnel"] = df["nom_professionnel"].str.strip().str.title()
@@ -306,10 +324,16 @@ def run():
     df = df.drop(columns=["dedup_key"])
     print(f"✅ After deduplication: {len(df)} doctors")
 
-    # ── 5. Ensure numeric types for GPS
+    # ── 5. Ensure numeric types for GPS + nullify out-of-bounds coordinates
     for col in ["latitude", "longitude"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
+    if "latitude" in df.columns:
+        mask = (df["latitude"] < 27) | (df["latitude"] > 36) | (df["longitude"] < -14) | (df["longitude"] > -1)
+        invalid = mask.sum()
+        if invalid:
+            print(f"  ⚠️  Nullified {invalid} GPS coordinates outside Morocco bounds")
+            df.loc[mask, ["latitude", "longitude"]] = None
 
     # ── 6. DQV Gate ── STOP pipeline if critical checks fail
     dqv_passed = run_dqv(df)

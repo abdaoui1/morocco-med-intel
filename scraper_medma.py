@@ -16,6 +16,7 @@ import time
 import json
 import logging
 import argparse
+import threading
 import pandas as pd
 from pathlib import Path
 from bs4 import BeautifulSoup
@@ -45,6 +46,8 @@ ALL_CITIES = [
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("medma")
+
+_flush_lock = threading.Lock()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -271,10 +274,11 @@ def run(specialities, cities, output=RAW_OUTPUT, resume=True, limit=None, worker
 
 
 def _flush(records, path, append):
-    df = pd.DataFrame(records)
-    mode = "a" if append else "w"
-    header = not (append and path.exists() and path.stat().st_size > 0)
-    df.to_csv(path, mode=mode, header=header, index=False, encoding="utf-8-sig")
+    with _flush_lock:
+        df = pd.DataFrame(records)
+        mode = "a" if append else "w"
+        header = not (append and path.exists() and path.stat().st_size > 0)
+        df.to_csv(path, mode=mode, header=header, index=False, encoding="utf-8-sig")
     log.info(f"  💾 {len(records)} enregistrements sauvegardés")
 
 

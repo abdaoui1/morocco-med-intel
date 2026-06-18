@@ -416,141 +416,62 @@ with tab3:
 
 # ── Tab 4: Opportunités ────────────────────────────────────────────────────
 with tab4:
-    st.header("💡 Gaps — Zones sans Concurrence")
+    st.header("💡 Opportunités — Par Ville & Spécialité")
+    st.markdown("Classement des villes par **manque de médecins** pour une spécialité donnée.")
 
-    # Check quartier coverage quality
-    _gaps_ok = True
-    try:
-        import pandas as _pd
-        _df_check = _pd.read_csv("data/processed/dabadoc_clean.csv")
-        _inconnu_pct = (_df_check["quartier_clean"] == "Autre/Inconnu").mean()
-        if _inconnu_pct > 0.5:
-            st.warning(
-                f"⚠️ **Données insuffisantes pour l'analyse des gaps** — "
-                f"{_inconnu_pct:.0%} des médecins n'ont pas d'adresse connue. "
-                f"Lancez le scraper med.ma complet puis re-mergez pour activer cette fonctionnalité."
+    specs_data2 = api_get("/specialites") or []
+    sel_gspec = st.selectbox("Spécialité", [s["specialite"] for s in specs_data2], key="g_spec")
+
+    if st.button("🔍 Analyser les opportunités"):
+        data_opp = api_get("/opportunites", {"specialite": sel_gspec})
+        if data_opp:
+            df_opp = pd.DataFrame(data_opp)
+            df_opp["score_pct"] = (df_opp["score_opportunite"] * 100).round(1)
+
+            top = df_opp.iloc[0]
+            st.metric("🏆 Top opportunité", top["ville"],
+                      delta=f"{int(top['nb_spec'])} {sel_gspec}s pour {int(top['total'])} médecins")
+
+            fig_opp = px.bar(
+                df_opp.head(20), x="score_pct", y="ville", orientation="h",
+                color="score_pct", color_continuous_scale="RdYlGn",
+                title=f"{sel_gspec} — Score opportunité par ville (top 20)",
+                labels={"score_pct": "Score opportunité (%)", "ville": ""},
+                text="score_pct",
             )
-            _gaps_ok = False
-    except Exception:
-        pass
+            fig_opp.update_layout(yaxis={"categoryorder": "total ascending"}, height=520)
+            st.plotly_chart(fig_opp, use_container_width=True)
 
-    if _gaps_ok:
+            st.dataframe(
+                df_opp[["ville", "nb_spec", "total", "score_pct"]]
+                .rename(columns={"nb_spec": sel_gspec, "total": "Total médecins", "score_pct": "Score %"}),
+                use_container_width=True, hide_index=True
+            )
 
-    if _gaps_ok:
-        st.markdown("Trouvez les quartiers d'une ville sans médecin pour votre spécialité.")
-
-        villes_data2 = api_get("/villes") or []
-        specs_data2  = api_get("/specialites") or []
-
-        g1, g2 = st.columns(2)
-        sel_gville = g1.selectbox("Ville", [v["ville"] for v in villes_data2], key="g_ville")
-        sel_gspec  = g2.selectbox("Spécialité", [s["specialite"] for s in specs_data2], key="g_spec")
-
-        if st.button("🔍 Analyser les gaps"):
-            gaps = api_get("/gaps", {"ville": sel_gville, "specialite": sel_gspec})
-            if gaps:
-                st.metric("Quartiers sans concurrence", gaps["total_gaps"])
-                if gaps["quartiers_sans_concurrence"]:
-                    st.success("Zones d'opportunité :")
-                    cols = st.columns(3)
-                    for i, q in enumerate(gaps["quartiers_sans_concurrence"]):
-                        cols[i % 3].write(f"📍 {q}")
-                else:
-                    st.info("Marché saturé dans tous les quartiers connus.")
-
-
-# ── Tab 5: ML Saturation ───────────────────────────────────────────────────
+# ── Tab 5: Saturation ──────────────────────────────────────────────────────
 with tab5:
-    st.header("🤖 Prédiction de Saturation — ML")
-    st.markdown("Estimez si une zone médicale est **saturée** ou une **opportunité** d'installation.")
+    st.header("📊 Saturation — Densité par Ville & Spécialité")
+    st.markdown("Heatmap de la densité médicale : **rouge** = saturé, **vert** = opportunité.")
 
-    from pathlib import Path as _Path
-    MODEL_PATH  = _Path("models/saturation_model.pkl")
-    REPORT_PATH = _Path("models/saturation_report.json")
-
-    # Train button
-    if not MODEL_PATH.exists():
-        st.warning("⚠️ Modèle non entraîné.")
-        if st.button("🏋️ Entraîner le modèle"):
-            with st.spinner("Entraînement en cours…"):
-                import sys
-                result = subprocess.run([sys.executable, "model.py"], capture_output=True, text=True)
-                if result.returncode == 0:
-                    st.success("✅ Modèle entraîné!")
-                    st.code(result.stdout)
-                    st.rerun()
-                else:
-                    st.error(result.stderr)
-        st.stop()
-
-    # Model report
-    import json as _json
-    report = _json.loads(REPORT_PATH.read_text())
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Accuracy",  f"{report['accuracy']:.1%}")
-    m2.metric("AUC-ROC",   f"{report['auc_roc']:.3f}" if report.get("auc_roc") else "—")
-    m3.metric("F1 Macro",  f"{report['f1_macro']:.3f}")
-
-    # Feature importance chart
-    st.markdown("---")
-    st.subheader("📊 Feature Importance")
-    fi = report["feature_importance"]
-    fi_df = pd.DataFrame({"Feature": list(fi.keys()), "Importance": list(fi.values())})
-    fig_fi = px.bar(fi_df, x="Importance", y="Feature", orientation="h",
-                    color="Importance", color_continuous_scale="Blues")
-    fig_fi.update_layout(yaxis={"categoryorder": "total ascending"}, height=350)
-    st.plotly_chart(fig_fi, use_container_width=True)
-
-    # Prediction form
-    st.markdown("---")
-    st.subheader("🔮 Prédire une Zone")
-    villes_list_ml = [v["ville"] for v in (api_get("/villes") or [])]
-    specs_list_ml  = [s["specialite"] for s in (api_get("/specialites") or [])]
-
-    p1, p2 = st.columns(2)
-    pred_ville = p1.selectbox("Ville", villes_list_ml, key="ml_ville")
-    pred_spec  = p2.selectbox("Spécialité", specs_list_ml, key="ml_spec")
-
-    # Get quartiers for selected ville
-    med_data = api_get("/medecins", {"ville": pred_ville, "limit": 500}) or {"data": []}
-    quartiers = sorted(set(r.get("quartier_clean", "") for r in med_data["data"] if r.get("quartier_clean")))
-    pred_quartier = st.selectbox("Quartier", quartiers or ["Autre/Inconnu"], key="ml_quartier")
-
-    if st.button("🔮 Prédire la saturation"):
+    if st.button("🔥 Générer la heatmap"):
         try:
-            from model import predict_zone
-            result = predict_zone(pred_ville, pred_spec, pred_quartier)
-            if "error" in result:
-                st.warning(result["error"])
-            else:
-                score = result["saturation_score"]
-                label = result["label"]
-                st.markdown(f"### {label}")
-                st.progress(score)
-                st.metric("Score de saturation", f"{score:.1%}",
-                          delta="Risque élevé" if score >= 0.5 else "Bonne opportunité",
-                          delta_color="inverse")
-        except Exception as e:
-            st.error(f"Erreur: {e}")
+            df_c = pd.read_csv("data/processed/dabadoc_clean.csv")
+            pivot = (
+                df_c.groupby(["ville", "specialite_clean"]).size()
+                .unstack(fill_value=0)
+            )
+            # Keep top 15 villes + top 12 spécialités
+            top_v = df_c["ville"].value_counts().head(15).index
+            top_s = df_c["specialite_clean"].value_counts().head(12).index
+            pivot = pivot.loc[pivot.index.isin(top_v), pivot.columns.isin(top_s)]
 
-    # Batch: saturation scores for all specialties in selected ville
-    st.markdown("---")
-    st.subheader(f"📋 Saturation globale — {pred_ville}")
-    if st.button("📊 Analyser toutes les spécialités"):
-        try:
-            from model import predict_zone
-            rows = []
-            for spec in specs_list_ml:
-                r = predict_zone(pred_ville, spec, "Autre/Inconnu")
-                if "error" not in r:
-                    rows.append(r)
-            if rows:
-                df_scores = pd.DataFrame(rows).sort_values("saturation_score", ascending=False)
-                fig_scores = px.bar(df_scores, x="specialite", y="saturation_score",
-                                    color="saturation_score", color_continuous_scale="RdYlGn_r",
-                                    labels={"saturation_score": "Score Saturation", "specialite": "Spécialité"})
-                fig_scores.add_hline(y=0.5, line_dash="dash", line_color="red", annotation_text="Seuil saturation")
-                st.plotly_chart(fig_scores, use_container_width=True)
+            fig_h = px.imshow(
+                pivot, text_auto=True, aspect="auto",
+                color_continuous_scale="RdYlGn",
+                title="Densité médicale — Ville × Spécialité",
+                labels={"color": "Nb médecins"},
+            )
+            fig_h.update_layout(height=550)
+            st.plotly_chart(fig_h, use_container_width=True)
         except Exception as e:
             st.error(f"Erreur: {e}")

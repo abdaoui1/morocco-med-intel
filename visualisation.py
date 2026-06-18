@@ -57,8 +57,8 @@ fig4 = px.bar(
     title="🏘️ Top Quartiers par Ville (Top 5 villes)",
     labels={"count": "Nb médecins", "quartier_clean": "Quartier"}
 )
-fig4.write_html("data/viz/04_quartiers.html")
-print("✅ 04_quartiers.html")
+fig4.write_html("data/viz/04_avis_boxplot.html")
+print("✅ 04_avis_boxplot.html")
 
 # ── 5. Sources DabaDoc vs med.ma ──────────────────────────────────────────
 if "source" in df.columns:
@@ -69,8 +69,8 @@ if "source" in df.columns:
         title="📡 Sources des données",
         color_discrete_sequence=["#1f77b4", "#ff7f0e"]
     )
-    fig5.write_html("data/viz/05_sources.html")
-    print("✅ 05_sources.html")
+    fig5.write_html("data/viz/05_consultations.html")
+    print("✅ 05_consultations.html")
 
 # ── 6. Carte GPS des médecins ─────────────────────────────────────────────
 df_gps = df.dropna(subset=["latitude","longitude"]).copy()
@@ -101,8 +101,8 @@ fig7 = px.bar(
     labels={"nb_medecins": "Nb médecins", "quartier": ""}
 )
 fig7.update_layout(yaxis={"categoryorder": "total ascending"})
-fig7.write_html("data/viz/07_top_quartiers.html")
-print("✅ 07_top_quartiers.html")
+fig7.write_html("data/viz/07_top_medecins.html")
+print("✅ 07_top_medecins.html")
 
 # ── 8. Ratio médecins / ville (densité) ──────────────────────────────────
 ville_counts = df["ville"].value_counts().reset_index()

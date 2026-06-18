@@ -395,8 +395,6 @@ def enrich_missing(output: str, workers: int, delay: tuple):
         f'{{"current": 0, "total": {len(missing)}, "doctors": {len(df)}, "done": false, "phase": "enrich", "enrich_total": {len(missing)}}}'
     )
 
-    session = make_session()
-
     def _enrich_row(row: dict) -> dict:
         url = row.get("profile_url", "")
         if not url:

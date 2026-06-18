@@ -60,7 +60,7 @@ def get_medecins(
     ville:      Optional[str] = Query(None, description="Filtrer par ville"),
     specialite: Optional[str] = Query(None, description="Filtrer par spécialité (clean)"),
     page:       int = Query(1, ge=1),
-    limit:      int = Query(50, ge=1, le=500),
+    limit:      int = Query(50, ge=1, le=50000),
 ):
     df = load_df()
     if ville:
@@ -122,29 +122,29 @@ def get_carte(
     return df[cols].fillna("").to_dict(orient="records")
 
 
-@app.get("/gaps", summary="Quartiers sans médecin pour une spécialité donnée")
-def get_gaps(
-    ville:      str = Query(..., description="Ville cible"),
+@app.get("/opportunites", summary="Scoring opportunité par ville pour une spécialité")
+def get_opportunites(
     specialite: str = Query(..., description="Spécialité cible"),
+    min_total:  int = Query(50, description="Nb minimum de médecins dans la ville"),
 ):
     df = load_df()
-    df_a = load_analytics()
-    spec_col = "specialite_clean" if "specialite_clean" in df_a.columns else "specialite"
+    spec_col = "specialite_clean" if "specialite_clean" in df.columns else "specialite"
 
-    all_q  = set(df[df["ville"].str.lower() == ville.lower()]["quartier_clean"].unique()) - {"Autre/Inconnu"}
-    occ_q  = set(
-        df_a[
-            (df_a["ville"].str.lower() == ville.lower()) &
-            (df_a[spec_col].str.lower() == specialite.lower())
-        ]["quartier_clean"].unique()
-    ) - {"Autre/Inconnu"}
-    gaps = sorted(all_q - occ_q)
-    return {
-        "ville": ville,
-        "specialite": specialite,
-        "quartiers_sans_concurrence": gaps,
-        "total_gaps": len(gaps),
-    }
+    total_par_ville = df.groupby("ville").size().rename("total")
+    spec_df = df[df[spec_col].str.lower() == specialite.lower()]
+    spec_par_ville = spec_df.groupby("ville").size().rename("nb_spec")
+
+    result = total_par_ville.to_frame().join(spec_par_ville, how="left").fillna(0)
+    result["nb_spec"] = result["nb_spec"].astype(int)
+
+    # Filter villes significatives seulement
+    result = result[result["total"] >= min_total]
+    result["score_opportunite"] = (1 - result["nb_spec"] / result["total"]).round(4)
+
+    # Sort: nb_spec ascending (moins de médecins = meilleure opportunité), total descending (villes importantes)
+    result = result.reset_index().sort_values(["nb_spec", "total"], ascending=[True, False])
+
+    return result.to_dict(orient="records")
 
 
 if __name__ == "__main__":

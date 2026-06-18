@@ -26,36 +26,37 @@ MODEL_PATH    = MODELS_DIR / "saturation_model.pkl"
 REPORT_PATH   = MODELS_DIR / "saturation_report.json"
 
 FEATURES = [
-    "city_code", "spec_code", "district_code",
+    "spec_code", "district_code",
     "latitude_scaled", "longitude_scaled",
 ]
 
 
 def build_dataset() -> pd.DataFrame:
     """
-    Build supervised dataset:
-    Count doctors per (ville, specialite_clean, quartier_clean) → zone_count
-    Label: saturated = 1 if zone_count >= median, else 0
+    Build supervised dataset.
+    zone_count = nb doctors per (ville, specialite_clean).
+    saturated = 1 if zone_count >= 75th percentile (top 25% dense zones).
+    Features use encoded categories — NOT the raw groupby columns to avoid leakage.
     """
     df = pd.read_csv(MODELING_PATH)
 
-    # Count doctors per zone using clean data (not analytics which is exploded per specialty)
+    # Count per ville+specialite only (not quartier — avoids near-identity with features)
     zone_counts = (
         pd.read_csv(ANALYTICS_PATH)
-        .drop_duplicates(subset=["doctor_id", "ville", "specialite_clean", "quartier_clean"])
-        .groupby(["ville", "specialite_clean", "quartier_clean"])
+        .drop_duplicates(subset=["doctor_id", "ville", "specialite_clean"])
+        .groupby(["ville", "specialite_clean"])
         .size()
         .reset_index(name="zone_count")
     )
 
-    df = df.merge(zone_counts, on=["ville", "specialite_clean", "quartier_clean"], how="left")
+    df = df.merge(zone_counts, on=["ville", "specialite_clean"], how="left")
     df["zone_count"] = df["zone_count"].fillna(1)
 
-    # Label: saturated if zone_count >= median
-    median_count = df["zone_count"].median()
-    df["saturated"] = (df["zone_count"] >= median_count).astype(int)
+    # Use 75th percentile as threshold (top 25% = saturated)
+    p75 = df["zone_count"].quantile(0.75)
+    df["saturated"] = (df["zone_count"] >= p75).astype(int)
 
-    print(f"📊 Dataset: {len(df)} samples | Saturated: {df['saturated'].mean():.1%}")
+    print(f"📊 Dataset: {len(df)} samples | Saturated (top 25%): {df['saturated'].mean():.1%} | p75={p75:.0f} doctors/zone")
     return df
 
 
