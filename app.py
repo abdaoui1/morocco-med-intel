@@ -83,7 +83,7 @@ def require_api():
 
 # ── Sidebar ────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("🩺 DabaDoc Analytics")
+    st.title("🩺 Morocco Medical Analytics")
     st.markdown("---")
 
     # ── URL Input → Pipeline Trigger (professor requirement)
@@ -180,8 +180,26 @@ with st.sidebar:
                         if _mp.get("done") and _mp.get("doctors", 0) > 0:
                             st.success(f"✅ med.ma terminé — {_mp['doctors']} médecins")
 
-                            # ── Merge
-                            if st.button("🔀 Merger DabaDoc + med.ma"):
+                            # ── Scraper Telecontact
+                            if st.button("📞 Scraper Telecontact"):
+                                import threading, sys
+                                def _run_tel():
+                                    subprocess.run([sys.executable, "scraper_telecontact.py"], cwd=".")
+                                threading.Thread(target=_run_tel, daemon=True).start()
+                                st.success("✅ Scraper Telecontact lancé!")
+
+                            # Telecontact status
+                            _tel_raw = _Path("data/raw/telecontact_raw.csv")
+                            if _tel_raw.exists():
+                                try:
+                                    import pandas as _pd_tel
+                                    _tel_count = len(_pd_tel.read_csv(_tel_raw))
+                                    st.success(f"✅ Telecontact — {_tel_count} médecins")
+                                except Exception:
+                                    pass
+
+                            # ── Merge 3 sources
+                            if st.button("🔀 Merger les 3 sources"):
                                 import sys
                                 proc_m = subprocess.run([sys.executable, "merge.py"], capture_output=True, text=True, cwd=".")
                                 if proc_m.returncode == 0:
@@ -220,7 +238,7 @@ with st.sidebar:
             pass
 
     st.markdown("---")
-    st.info("Source: DabaDoc.com — Maroc")
+    st.info("Sources: DabaDoc · med.ma · Telecontact")
     st.caption(f"API: `{API_BASE}`")
 
     # Auto-refresh every 3s while scraping is running
@@ -271,7 +289,9 @@ c1, c2, c3, c4 = st.columns(4)
 c1.metric("Total Médecins",   stats["total_medecins"])
 c2.metric("Villes Couvertes", stats["total_villes"])
 c3.metric("Spécialités",      stats["total_specialites"] or "—")
-c4.metric("Avec GPS",         stats["avec_gps"] or "—")
+addr_count = stats.get("avec_adresse") or stats.get("avec_gps") or 0
+addr_pct   = round(addr_count / max(stats["total_medecins"], 1) * 100, 1)
+c4.metric("Avec Adresse", f"{addr_count:,}", delta=f"{addr_pct}%")
 
 # ── Tabs ───────────────────────────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Données", "📍 Carte", "📊 Analyse", "💡 Opportunités", "🤖 ML Saturation"])
@@ -367,7 +387,9 @@ with tab2:
     if carte_data is None:
         st.info("GPS non disponible. Re-lancez le scraper avec `--deep-scrape`.")
     elif len(carte_data) == 0:
-        st.warning("Aucun médecin avec GPS pour ces filtres.")
+        st.info(f"📍 Aucun médecin géolocalisé pour **{sel_ville_m}** / **{sel_spec_m}**. "
+                f"Les coordonnées GPS ne sont disponibles que pour {stats.get('avec_gps', 0):,} médecins sur {stats['total_medecins']:,}. "
+                f"Essayez **Casablanca** ou **Toutes** les villes.")
     else:
         df_map = pd.DataFrame(carte_data)
         st.caption(f"{len(df_map)} médecins géolocalisés")
@@ -405,14 +427,38 @@ with tab3:
             st.plotly_chart(fig_s, use_container_width=True)
 
     with a2:
-        st.subheader("Top 10 — Médecins par Quartier")
-        top_params = {"limit": 10, "page": 1}
-        if sel_ville_m != "Toutes": top_params["ville"] = sel_ville_m
-        top_data = api_get("/medecins", top_params)
-        if top_data and top_data["data"]:
-            df_top = pd.DataFrame(top_data["data"])
-            cols_show = [c for c in ["nom_professionnel", "specialite_clean", "ville", "quartier_clean"] if c in df_top.columns]
-            st.dataframe(df_top[cols_show].head(10), use_container_width=True)
+        st.subheader("Top Quartiers — Densité Médicale")
+        try:
+            df_c = pd.read_csv("data/processed/dabadoc_clean.csv")
+            q_counts = (
+                df_c[df_c["quartier_clean"] != "Autre/Inconnu"]
+                ["quartier_clean"].value_counts().head(15).reset_index()
+            )
+            q_counts.columns = ["quartier", "nb_medecins"]
+            fig_q = px.bar(q_counts, x="nb_medecins", y="quartier", orientation="h",
+                           color="nb_medecins", color_continuous_scale="Blues",
+                           labels={"nb_medecins": "Nb médecins", "quartier": ""})
+            fig_q.update_layout(yaxis={"categoryorder": "total ascending"}, height=420, showlegend=False)
+            st.plotly_chart(fig_q, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Données non disponibles: {e}")
+
+    # Heatmap ville × spécialité
+    st.markdown("---")
+    st.subheader("🔥 Densité — Ville × Spécialité")
+    try:
+        df_c = pd.read_csv("data/processed/dabadoc_clean.csv")
+        top_v = df_c["ville"].value_counts().head(15).index
+        top_s = df_c["specialite_clean"].value_counts().head(12).index
+        pivot = (df_c[df_c["ville"].isin(top_v) & df_c["specialite_clean"].isin(top_s)]
+                 .groupby(["ville", "specialite_clean"]).size().unstack(fill_value=0))
+        fig_h = px.imshow(pivot, text_auto=True, aspect="auto",
+                          color_continuous_scale="Blues",
+                          labels={"color": "Nb médecins"})
+        fig_h.update_layout(height=500)
+        st.plotly_chart(fig_h, use_container_width=True)
+    except Exception as e:
+        st.warning(f"Données non disponibles: {e}")
 
 # ── Tab 4: Opportunités ────────────────────────────────────────────────────
 with tab4:
@@ -448,30 +494,44 @@ with tab4:
                 use_container_width=True, hide_index=True
             )
 
-# ── Tab 5: Saturation ──────────────────────────────────────────────────────
+# ── Tab 5: Saturation ML ──────────────────────────────────────────────────
 with tab5:
-    st.header("📊 Saturation — Densité par Ville & Spécialité")
-    st.markdown("Heatmap de la densité médicale : **rouge** = saturé, **vert** = opportunité.")
+    st.header("🤖 Prédiction de Saturation — ML")
+    st.markdown("Prédit si une zone (ville + spécialité) est **saturée** ou une **opportunité**.")
 
-    if st.button("🔥 Générer la heatmap"):
-        try:
-            df_c = pd.read_csv("data/processed/dabadoc_clean.csv")
-            pivot = (
-                df_c.groupby(["ville", "specialite_clean"]).size()
-                .unstack(fill_value=0)
-            )
-            # Keep top 15 villes + top 12 spécialités
-            top_v = df_c["ville"].value_counts().head(15).index
-            top_s = df_c["specialite_clean"].value_counts().head(12).index
-            pivot = pivot.loc[pivot.index.isin(top_v), pivot.columns.isin(top_s)]
+    try:
+        import joblib, json as _json_ml
+        _model = joblib.load("models/saturation_model.pkl")
+        _report = _json_ml.loads(open("models/saturation_report.json").read())
 
-            fig_h = px.imshow(
-                pivot, text_auto=True, aspect="auto",
-                color_continuous_scale="RdYlGn",
-                title="Densité médicale — Ville × Spécialité",
-                labels={"color": "Nb médecins"},
-            )
-            fig_h.update_layout(height=550)
-            st.plotly_chart(fig_h, use_container_width=True)
-        except Exception as e:
-            st.error(f"Erreur: {e}")
+        col_m1, col_m2 = st.columns(2)
+        villes_ml = [v["ville"] for v in (api_get("/villes") or [])]
+        specs_ml  = [s["specialite"] for s in (api_get("/specialites") or [])]
+        sel_ville_ml = col_m1.selectbox("Ville", villes_ml, key="ml_ville")
+        sel_spec_ml  = col_m2.selectbox("Spécialité", specs_ml, key="ml_spec")
+
+        if st.button("🔮 Prédire la saturation"):
+            from model import predict_zone
+            result_ml = predict_zone(sel_ville_ml, sel_spec_ml, "Autre/Inconnu")
+            if "error" not in result_ml:
+                score = result_ml["saturation_score"]
+                label = result_ml["label"]
+                col_r1, col_r2 = st.columns(2)
+                col_r1.metric("Score Saturation", f"{score:.0%}", delta=label)
+                col_r2.metric("Modèle", f"Accuracy {_report['accuracy']:.1%}", delta=f"AUC {_report['auc_roc']:.2f}")
+                st.progress(score)
+            else:
+                st.warning(result_ml["error"])
+
+        with st.expander("📈 Feature Importance du modèle"):
+            fi = _report.get("feature_importance", {})
+            fi_df = pd.DataFrame(list(fi.items()), columns=["Feature", "Importance"])
+            fig_fi = px.bar(fi_df, x="Importance", y="Feature", orientation="h",
+                            color="Importance", color_continuous_scale="Blues")
+            fig_fi.update_layout(yaxis={"categoryorder": "total ascending"}, height=300)
+            st.plotly_chart(fig_fi, use_container_width=True)
+
+    except FileNotFoundError:
+        st.info("Modèle non disponible. Lancez `python model.py` d'abord.")
+    except Exception as e:
+        st.error(f"Erreur: {e}")

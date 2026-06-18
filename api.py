@@ -52,6 +52,7 @@ def get_stats():
         "total_villes":   int(df["ville"].nunique()),
         "total_specialites": int(df["specialite_clean"].nunique()) if "specialite_clean" in df.columns else None,
         "avec_gps":       int(df["latitude"].notna().sum()) if "latitude" in df.columns else None,
+        "avec_adresse":   int((df["adresse_complete"] != "Non spécifiée").sum()) if "adresse_complete" in df.columns else None,
     }
 
 

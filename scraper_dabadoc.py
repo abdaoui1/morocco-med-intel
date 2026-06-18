@@ -419,24 +419,26 @@ def enrich_missing(output: str, workers: int, delay: tuple):
 
     enriched_map = {r["nom_professionnel"]: r for r in df}
     done = 0
+
+    def _flush_csv():
+        with open(out, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=FIELD_NAMES)
+            writer.writeheader()
+            for row in enriched_map.values():
+                writer.writerow({k: row.get(k, "") for k in FIELD_NAMES})
+
     with ThreadPoolExecutor(max_workers=workers) as ex:
         futures = {ex.submit(_enrich_row, r): r for r in missing}
         for fut in as_completed(futures):
             result = fut.result()
             enriched_map[result["nom_professionnel"]] = result
             done += 1
-            if done % 10 == 0 or done == len(missing):
+            if done % 100 == 0 or done == len(missing):
                 progress_file.write_text(
                     f'{{"current": {done}, "total": {len(missing)}, "doctors": {len(df)}, "done": false, "phase": "enrich"}}'
                 )
-                logging.info(f"Enriched {done}/{len(missing)}")
-
-    # Write back full CSV
-    with open(out, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELD_NAMES)
-        writer.writeheader()
-        for row in enriched_map.values():
-            writer.writerow({k: row.get(k, "") for k in FIELD_NAMES})
+                _flush_csv()
+                logging.info(f"Enriched {done}/{len(missing)} — CSV saved")
 
     logging.info(f"✅ Enrichment complete — {len(missing)} profiles updated")
     progress_file.write_text(
