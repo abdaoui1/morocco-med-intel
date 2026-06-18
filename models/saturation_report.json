@@ -1,16 +1,14 @@
 {
-  "accuracy": 0.9995,
-  "auc_roc": 1.0,
-  "f1_macro": 0.9993,
+  "accuracy": 0.6761,
+  "auc_roc": 0.8188,
+  "f1_macro": 0.6658,
   "feature_importance": {
-    "city_code": 0.5728665842280655,
-    "spec_code": 0.40933011057136254,
-    "latitude_scaled": 0.008662105425279672,
-    "longitude_scaled": 0.005665747157981981,
-    "district_code": 0.003475452617310279
+    "spec_code": 0.8882636649905618,
+    "latitude_scaled": 0.04981874410365038,
+    "district_code": 0.03404869309942204,
+    "longitude_scaled": 0.027868897806365905
   },
   "features_used": [
-    "city_code",
     "spec_code",
     "district_code",
     "latitude_scaled",

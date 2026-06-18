@@ -91,7 +91,10 @@ def run():
                     medma_row = medma_row.iloc[0]
                 addr = medma_row["adresse_complete"].strip()
                 if addr:
+                    # DabaDoc maha adresse → khud adresse + profile_url dyal med.ma
                     row["adresse_complete"] = addr
+                    row["profile_url"]      = medma_row["profile_url"].strip()
+                    row["source"]           = "med.ma"
                     enriched += 1
         result_rows.append(row)
 
