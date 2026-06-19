@@ -12,3 +12,5 @@ dvc==3.67.1
 psutil
 playwright>=1.49.0
 rapidfuzz>=3.10.1
+reportlab>=4.2.0
+anthropic>=0.40.0
