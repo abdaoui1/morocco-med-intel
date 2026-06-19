@@ -1,12 +1,12 @@
 {
-  "accuracy": 0.6761,
-  "auc_roc": 0.8188,
-  "f1_macro": 0.6658,
+  "accuracy": 0.6642,
+  "auc_roc": 0.8101,
+  "f1_macro": 0.6525,
   "feature_importance": {
-    "spec_code": 0.8882636649905618,
-    "latitude_scaled": 0.04981874410365038,
-    "district_code": 0.03404869309942204,
-    "longitude_scaled": 0.027868897806365905
+    "spec_code": 0.8882346264037421,
+    "latitude_scaled": 0.043315941567073565,
+    "district_code": 0.03941336669491595,
+    "longitude_scaled": 0.029036065334268533
   },
   "features_used": [
     "spec_code",
@@ -14,7 +14,7 @@
     "latitude_scaled",
     "longitude_scaled"
   ],
-  "n_train": 15103,
-  "n_test": 3776,
-  "saturated_rate": 0.2528
+  "n_train": 18889,
+  "n_test": 4723,
+  "saturated_rate": 0.2555
 }
