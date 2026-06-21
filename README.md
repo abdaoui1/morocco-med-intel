@@ -2,6 +2,16 @@
 
 Pipeline complet de **Data Engineering & ML** pour analyser la répartition des médecins au Maroc, basé sur les données de [DabaDoc.com](https://www.dabadoc.com).
 
+## Quick Fix (Run via the Python module)
+.\.venv\Scripts\streamlit run app.py
+or 
+.\.venv\Scripts\python.exe -m streamlit run app.py
+( in cmd you can activate your environment first by : 
+.venv\Scripts\activate.bat
+then streamlit run app.py
+ )
+
+
 ## Architecture
 
 ```

@@ -369,7 +369,7 @@ with tab1:
         col_cfg_search = {}
         if "profile_url" in disp_cols:
             col_cfg_search["profile_url"] = st.column_config.LinkColumn("Profil DabaDoc")
-        st.dataframe(df_search[disp_cols], use_container_width=True,
+        st.dataframe(df_search[disp_cols], width="stretch",
                      hide_index=True, column_config=col_cfg_search)
         st.download_button(
             label=f"⬇️ Télécharger les résultats ({len(df_search)})",
@@ -415,7 +415,7 @@ with tab1:
         yaxis={"categoryorder": "total ascending"},
         coloraxis_showscale=False, height=450,
     )
-    st.plotly_chart(fig_villes, use_container_width=True)
+    st.plotly_chart(fig_villes, width="stretch")
 
     col_donut, col_tree = st.columns(2)
 
@@ -435,7 +435,7 @@ with tab1:
             color_discrete_sequence=px.colors.sequential.Blues_r,
         )
         fig_donut.update_traces(textposition="inside", textinfo="percent+label")
-        st.plotly_chart(fig_donut, use_container_width=True)
+        st.plotly_chart(fig_donut, width="stretch")
 
     with col_tree:
         tree_data = (
@@ -450,7 +450,7 @@ with tab1:
             labels={"ism_moy": "ISM moyen"},
         )
         fig_tree.update_layout(height=420)
-        st.plotly_chart(fig_tree, use_container_width=True)
+        st.plotly_chart(fig_tree, width="stretch")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -494,7 +494,7 @@ with tab2:
         xaxis_title="Ville", yaxis_title="ISM (médecins / 10k hab.)",
         height=480, showlegend=False,
     )
-    st.plotly_chart(fig_ism, use_container_width=True)
+    st.plotly_chart(fig_ism, width="stretch")
 
     # Tableau ISM
     df_ism_tbl = df_ism[["ville", "nb_medecins", "population_2024", "ism"]].copy()
@@ -506,7 +506,7 @@ with tab2:
     df_ism_tbl["ISM"]        = df_ism_tbl["ISM"].round(3)
     df_ism_tbl["Population"] = df_ism_tbl["Population"].fillna(0).astype(int)
     df_ism_tbl = df_ism_tbl.sort_values("ISM", ascending=False).reset_index(drop=True)
-    st.dataframe(df_ism_tbl, use_container_width=True, hide_index=True)
+    st.dataframe(df_ism_tbl, width="stretch", hide_index=True)
 
     # ── F3 — Export CSV ISM ───────────────────────────────────────────────────
     st.download_button(
@@ -610,7 +610,7 @@ with tab3:
         borderwidth=1,
     )
     fig_ioe.update_layout(height=500)
-    st.plotly_chart(fig_ioe, use_container_width=True)
+    st.plotly_chart(fig_ioe, width="stretch")
 
     df_ioe_tbl = df_ioe[[
         "ville", "ioe", "ioe_badge", "pib_par_hab_index", "ism", "croissance_demo"
@@ -622,7 +622,7 @@ with tab3:
     })
     df_ioe_tbl["IOE"] = df_ioe_tbl["IOE"].round(3)
     df_ioe_tbl[f"ISM {sel_spec_ioe}"] = df_ioe_tbl[f"ISM {sel_spec_ioe}"].round(3)
-    st.dataframe(df_ioe_tbl, use_container_width=True, hide_index=True)
+    st.dataframe(df_ioe_tbl, width="stretch", hide_index=True)
 
     # ── F3 — Export CSV IOE ───────────────────────────────────────────────────
     st.download_button(
@@ -691,7 +691,7 @@ with tab4:
             title=f"Couverture médicale — {sel_spec_desert}",
         )
         fig_desert_map.update_layout(height=520)
-        st.plotly_chart(fig_desert_map, use_container_width=True)
+        st.plotly_chart(fig_desert_map, width="stretch")
     else:
         st.info("Coordonnées GPS insuffisantes pour afficher la carte.")
 
@@ -716,7 +716,7 @@ with tab4:
         )
     else:
         st.markdown(f"**{len(df_tbl_d)} désert(s) médical(aux) détecté(s) pour {sel_spec_desert}**")
-        st.dataframe(df_tbl_d, use_container_width=True, hide_index=True)
+        st.dataframe(df_tbl_d, width="stretch", hide_index=True)
 
         # ── F3 — Export CSV Déserts ───────────────────────────────────────────
         st.download_button(
@@ -847,7 +847,7 @@ with tab5:
             height=max(350, len(specs_commun) * 30),
             legend=dict(orientation="h", y=1.05),
         )
-        st.plotly_chart(fig_compare, use_container_width=True)
+        st.plotly_chart(fig_compare, width="stretch")
     else:
         st.info("Données insuffisantes pour cette ville.")
 
@@ -865,7 +865,7 @@ with tab5:
     df_opp_ville["ISM ville"]          = df_opp_ville["ISM ville"].round(3)
     df_opp_ville = df_opp_ville.sort_values("Écart", ascending=False).reset_index(drop=True)
 
-    st.dataframe(df_opp_ville, use_container_width=True, hide_index=True)
+    st.dataframe(df_opp_ville, width="stretch", hide_index=True)
 
     # ── F3 — Export CSV Profil ville ──────────────────────────────────────────
     st.download_button(
@@ -970,7 +970,7 @@ with tab6:
             title="Comparaison radar — indicateurs normalisés (0–1)",
             showlegend=True, height=480,
         )
-        st.plotly_chart(fig_radar, use_container_width=True)
+        st.plotly_chart(fig_radar, width="stretch")
 
         # ── Tableau comparatif ────────────────────────────────────────────────
         st.markdown("**Indicateurs bruts**")
@@ -978,7 +978,7 @@ with tab6:
         df_comp_disp["Population"] = df_comp_disp["Population"].apply(
             lambda x: f"{x:,}" if x > 0 else "N/D"
         )
-        st.dataframe(df_comp_disp, use_container_width=True, hide_index=True)
+        st.dataframe(df_comp_disp, width="stretch", hide_index=True)
 
         # ── F3 — Export CSV Comparaison ───────────────────────────────────────
         st.download_button(
